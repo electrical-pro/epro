@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<style>
+
+body {
+    background-color: #121212;
+    color: #ffffff;
+    font-family: Arial, sans-serif;
+    text-align: center;
+}
+
+h1 {
+    margin-top: 20px;
+}
+
+.styled-table {
+    margin: 25px auto;
+    border-collapse: collapse;
+    font-size: 0.9em;
+    min-width: 400px;
+    background-color: #333;
+    border-radius: 5px 5px 0 0;
+    overflow: hidden;
+}
+
+.styled-table thead tr {
+    background-color: #444;
+    color: #ffffff;
+    text-align: left;
+    font-weight: bold;
+}
+
+.styled-table th, .styled-table td {
+    padding: 12px 15px;
+}
+
+.styled-table tbody tr {
+    border-bottom: 1px solid #dddddd;
+}
+
+.styled-table tbody tr:nth-of-type(even) {
+    background-color: #555;
+}
+
+.styled-table tbody tr:last-of-type {
+    border-bottom: 2px solid #444;
+}
+
+.styled-table tbody tr.active-row {
+    font-weight: bold;
+    color: #009879;
+}
+
+
+</style>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Power Outage Analysis</title>
+</head>
+<body>
+    <h1>Power Outage Analysis</h1>
+    <div id="results"></div>
+
+
+    <script>
+document.addEventListener("DOMContentLoaded", function() {
+    const timestamp = new Date().getTime(); // Get current timestamp
+    const url = `https://api.thingspeak.com/channels/1288695/feed.json?offset=0&results=2500&key=KMPJJFINTMO4GWQK&_=${timestamp}`;
+
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            const feeds = data.feeds;
+            const gaps = findDataGaps(feeds);
+            displayGaps(gaps, feeds);
+        })
+        .catch(error => console.error('Error fetching data:', error));
+
+    function findDataGaps(feeds) {
+        const threeMinutes = 5 * 60 * 1000; // three minutes in milliseconds
+        const gaps = [];
+
+        for (let i = 1; i < feeds.length; i++) {
+            const previousTime = new Date(feeds[i - 1].created_at).getTime();
+            const currentTime = new Date(feeds[i].created_at).getTime();
+            const difference = currentTime - previousTime;
+
+            if (difference >= threeMinutes) {
+                const gapDurationMinutes = difference / (60 * 1000); // convert ms to minutes
+                gaps.push({
+                    start: feeds[i - 1].created_at,
+                    end: feeds[i].created_at,
+                    duration: gapDurationMinutes
+                });
+            }
+        }
+
+        // Check the last data point
+        const lastTime = new Date(feeds[feeds.length - 1].created_at).getTime();
+        const now = new Date().getTime();
+        const currentDifference = now - lastTime;
+
+        if (currentDifference >= threeMinutes) {
+            const ongoingDurationMinutes = currentDifference / (60 * 1000); // convert ms to minutes
+            gaps.push({
+                start: feeds[feeds.length - 1].created_at,
+                end: 'ongoing',
+                duration: ongoingDurationMinutes
+            });
+        }
+
+        return gaps;
+    }
+
+    function displayGaps(gaps, feeds) {
+        const resultsDiv = document.getElementById('results');
+        resultsDiv.innerHTML = '<h2>Outage Periods:</h2>';
+
+        if (gaps.length === 0) {
+            resultsDiv.innerHTML += '<p>No power outages of 3 minutes or more detected.</p>';
+        } else {
+            const table = document.createElement('table');
+            table.classList.add('styled-table');
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th>Start Time</th>
+                        <th>End Time</th>
+                        <th>Duration</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            `;
+
+            const tbody = table.querySelector('tbody');
+
+            gaps.forEach(gap => {
+                const localStart = formatDateTime(gap.start);
+                let localEnd = gap.end === 'ongoing' ? 'Ongoing Blackout' : formatDateTime(gap.end);
+                const hours = Math.floor(gap.duration / 60);
+                const minutes = Math.floor(gap.duration % 60);
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${localStart}</td>
+                    <td>${localEnd}</td>
+                    <td>${hours} hours and ${minutes} minutes</td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            resultsDiv.appendChild(table);
+        }
+
+        // Show last update time
+        const lastUpdate = new Date(feeds[feeds.length - 1].created_at);
+        const lastUpdateFormatted = formatDateTime(lastUpdate);
+        const lastTime = new Date(feeds[feeds.length - 1].created_at).getTime();
+        const now = new Date().getTime();
+        const currentDifference = now - lastTime;
+
+        if (currentDifference < 1 * 60 * 1000) {
+            resultsDiv.innerHTML += `<p>Last update: ${lastUpdateFormatted}. No blackout detected.</p>`;
+        }
+    }
+
+    function formatDateTime(dateTime) {
+        const date = new Date(dateTime);
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are zero-based
+        const year = date.getFullYear();
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+
+        return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+    }
+});
+
+
+    </script>
+</body>
+</html>
