@@ -21,13 +21,13 @@
             border-collapse: collapse;
             font-size: 0.9em;
             min-width: 400px;
-            background-color: #333;
+            background-color: rgb(62, 52, 55);
             border-radius: 5px 5px 0 0;
             overflow: hidden;
         }
 
         .styled-table thead tr {
-            background-color: #444;
+            background-color: #131313;
             color: #ffffff;
             text-align: left;
             font-weight: bold;
@@ -38,15 +38,15 @@
         }
 
         .styled-table tbody tr {
-            border-bottom: 1px solid #dddddd;
+            border-bottom: 1px solid #e2e2e2;
         }
 
         .styled-table tbody tr:nth-of-type(even) {
-            background-color: #555;
+            background-color: #001d25;
         }
 
         .styled-table tbody tr:last-of-type {
-            border-bottom: 2px solid #444;
+            border-bottom: 2px solid #ee6d04;
         }
 
         .styled-table tbody tr.active-row {
@@ -55,8 +55,15 @@
         }
 
         .chart-container {
-            width: 80%;
+            width: 90%;
+            max-width: 1000px;
             margin: auto;
+        }
+
+        @media (max-width: 600px) {
+            .chart-container {
+                width: 100%;
+            }
         }
     </style>
 </head>
@@ -129,12 +136,17 @@
                         hasPower: false
                     });
                 } else {
-                    gaps.push({
-                        start: feeds[feeds.length - 1].created_at,
-                        end: new Date().toISOString(),
-                        duration: currentDifference / (60 * 1000),
-                        hasPower: true
-                    });
+                    if (gaps.length > 0 && gaps[gaps.length - 1].hasPower) {
+                        gaps[gaps.length - 1].end = new Date().toISOString();
+                        gaps[gaps.length - 1].duration += currentDifference / (60 * 1000);
+                    } else {
+                        gaps.push({
+                            start: feeds[feeds.length - 1].created_at,
+                            end: new Date().toISOString(),
+                            duration: currentDifference / (60 * 1000),
+                            hasPower: true
+                        });
+                    }
                 }
 
                 return gaps;
