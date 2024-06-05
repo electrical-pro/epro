@@ -21,7 +21,7 @@
             border-collapse: collapse;
             font-size: 0.9em;
             min-width: 400px;
-            background-color: rgb(62, 52, 55);
+            background-color: rgb(31, 69, 54);
             border-radius: 5px 5px 0 0;
             overflow: hidden;
         }
@@ -42,7 +42,7 @@
         }
 
         .styled-table tbody tr:nth-of-type(even) {
-            background-color: #001d25;
+            background-color: #001a21;
         }
 
         .styled-table tbody tr:last-of-type {
@@ -154,7 +154,7 @@
 
             function displayGaps(gaps, feeds) {
                 const resultsDiv = document.getElementById('results');
-                resultsDiv.innerHTML = '<h2>Outage Periods:</h2>';
+                resultsDiv.innerHTML = '<h2>Power / Blackout Periods:</h2>';
 
                 if (gaps.length === 0) {
                     resultsDiv.innerHTML += '<p>No power outages of 3 minutes or more detected.</p>';
@@ -226,17 +226,25 @@
                 });
                 const data = gaps.map(gap => gap.duration);
                 const backgroundColors = gaps.map(gap => gap.hasPower ? 'green' : 'red');
+                const datasets = [
+                    {
+                        label: 'Blackout Duration',
+                        data: data.map((duration, index) => !gaps[index].hasPower ? duration : 0),
+                        backgroundColor: 'red',
+                    },
+                    {
+                        label: 'Power Duration',
+                        data: data.map((duration, index) => gaps[index].hasPower ? duration : 0),
+                        backgroundColor: 'green',
+                    }
+                ];
 
                 const ctx = document.getElementById('outageChart').getContext('2d');
                 new Chart(ctx, {
                     type: 'bar',
                     data: {
                         labels: labels,
-                        datasets: [{
-                            label: 'Duration (minutes)',
-                            data: data,
-                            backgroundColor: backgroundColors,
-                        }]
+                        datasets: datasets
                     },
                     options: {
                         responsive: true,
@@ -257,7 +265,7 @@
                         },
                         plugins: {
                             legend: {
-                                display: false
+                                display: true
                             },
                             tooltip: {
                                 callbacks: {
