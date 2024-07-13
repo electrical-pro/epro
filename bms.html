@@ -100,8 +100,8 @@
 	
 Highcharts.setOptions({
 
-colors: ['#3366ff',  '#ff0000', '#f4740b', '#ff0066', 
-   '#FFFF33', '#e4d354', '#2b908f', '#f45b5b', '#91e8e1'],
+colors: ['#ff0000', '#3366ff', '#FFFF33', '#ff0066', '#f4740b', 
+   '#e4d354', '#2b908f', '#f45b5b', '#91e8e1'],
 
 
   chart: {
@@ -546,9 +546,11 @@ rangeSelector: {
      {
     }],
 					    plotOptions: {          ////////////////////////////////////////////////HERE What I DID
-        series: {
-            threshold: null,
-			fillOpacity: 0.3
+                series: {
+			      fillOpacity: 0.3,
+            threshold: 0,
+            // negativeColor: '#F70366',
+            // color: '#2B88F5',
         }
     },                                      ////////////////////////////////////////////////////////////////
 		exporting: {
