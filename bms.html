@@ -230,6 +230,9 @@ channelKeys.push({channelNumber:2598250, name:'Power',key:'NZTXVJP3YLDX1HF3',
 
 channelKeys.push({channelNumber:2598250, name:'SOC',key:'NZTXVJP3YLDX1HF3',
   fieldList:[{field:4,axis:'SOC'}]});
+
+channelKeys.push({channelNumber:2598250, name:'AvrCellVol',key:'NZTXVJP3YLDX1HF3',
+  fieldList:[{field:7,axis:'avrV'}]});
     
 // user's timezone offset
 var myOffset = new Date().getTimezoneOffset();
@@ -469,7 +472,7 @@ rangeSelector: {
 			}
 		},
     tooltip: {
-      valueDecimals: 2,
+      // valueDecimals: 2,
       valueSuffix: '',
 	
 
@@ -529,6 +532,15 @@ rangeSelector: {
       },
       
       id: 'SOC',
+      showEmpty: false,
+    }, {
+      
+      title: {
+          text: 'Avrage Cell Voltage / V'
+
+      },
+      
+      id: 'avrV',
       showEmpty: false,
     },
      {
