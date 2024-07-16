@@ -269,13 +269,28 @@
           enabled: true
         },
         exporting: { enabled: false },
-        navigator: { enabled: false }
+        navigator: { enabled: false },
+
+        loading: {
+          labelStyle: {
+            color: 'white',
+            fontSize: '26px'
+          },
+          style: {
+            backgroundColor: 'rgba(0, 0, 0, 0.75)'
+          },
+          label: 'Loading data, please wait...'
+        }
       });
+
+      // Show loading indicator
+      dynamicChart.showLoading();
 
       var last_date;
       var allSeries = {};
 
       function loadThingSpeakChannel(channelNumber, key, fieldList) {
+        
         return $.getJSON('https://api.thingspeak.com/channels/' + channelNumber + '/feed.json?results=8000&api_key=' + key)
           .then(function (data) {
             fieldList.forEach(function(field) {
@@ -323,6 +338,9 @@
 
           dynamicChart.redraw();
 
+          // Hide loading indicator
+          dynamicChart.hideLoading();
+
           // Debug logging
           console.log("Final chart configuration:");
           dynamicChart.yAxis.forEach(function(axis) {
@@ -337,6 +355,7 @@
         });
     });
   </script>
+  <title>SmartHome | BMS DATA</title>
 </head>
 <body>
   <div id="chart-container"></div>
