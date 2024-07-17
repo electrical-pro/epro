@@ -41,17 +41,24 @@
             border-bottom: 1px solid #e2e2e2;
         }
 
+        .styled-table tbody tr:nth-of-type(odd) {
+            background-color: #00a6ac; /* Lighter for power */
+        }
+
         .styled-table tbody tr:nth-of-type(even) {
-            background-color: #001a21;
+            background-color: #000d11; /* Darker for blackout */
         }
 
         .styled-table tbody tr:last-of-type {
             border-bottom: 2px solid #ee6d04;
         }
 
-        .styled-table tbody tr.active-row {
-            font-weight: bold;
-            color: #009879;
+        .styled-table tbody tr.power-row {
+            background-color: #0d4042 !important;
+        }
+
+        .styled-table tbody tr.blackout-row {
+            background-color: #00161d !important;
         }
 
         .chart-container {
@@ -182,6 +189,7 @@
                         const hours = Math.floor(gap.duration / 60);
                         const minutes = Math.floor(gap.duration % 60);
                         const row = document.createElement('tr');
+                        row.classList.add(gap.hasPower ? 'power-row' : 'blackout-row');
                         row.innerHTML = `
                             <td>${localStart}</td>
                             <td>${localEnd}</td>
@@ -225,17 +233,17 @@
                     return `${start} - ${end}`;
                 });
                 const data = gaps.map(gap => gap.duration);
-                const backgroundColors = gaps.map(gap => gap.hasPower ? 'green' : 'red');
+                const backgroundColors = gaps.map(gap => gap.hasPower ? '#22c7b6' : '#e0244a');
                 const datasets = [
                     {
                         label: 'Blackout Duration',
                         data: data.map((duration, index) => !gaps[index].hasPower ? duration : 0),
-                        backgroundColor: 'red',
+                        backgroundColor: '#e0244a',
                     },
                     {
                         label: 'Power Duration',
                         data: data.map((duration, index) => gaps[index].hasPower ? duration : 0),
-                        backgroundColor: 'green',
+                        backgroundColor: '#22c7b6',
                     }
                 ];
 
