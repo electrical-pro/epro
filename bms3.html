@@ -289,71 +289,50 @@
       var last_date;
       var allSeries = {};
 
-      function loadThingSpeakChannel(channelNumber, key, fieldList) {
-        
-        return $.getJSON('https://api.thingspeak.com/channels/' + channelNumber + '/feed.json?results=8000&api_key=' + key)
-          .then(function (data) {
-            fieldList.forEach(function(field) {
-              var fieldData = [];
-              for (var h = 0; h < data.feeds.length; h++) {
-                var fieldStr = "data.feeds[" + h + "].field" + field.field;
-                var v = eval(fieldStr);
-                if (v != null) {
-                  var p = [getChartDate(data.feeds[h].created_at), parseFloat(v)];
-                  fieldData.push(p);
-                  if (h == (data.feeds.length - 1)) {
-                    last_date = getChartDate(data.feeds[h].created_at);
-                  }
-                }
-              }
-
-              allSeries[field.axis] = {
-                id: field.field,
-                name: data.channel["field" + field.field],
-                data: fieldData,
-                yAxis: field.axis,
-                tooltip: {
-                  valueDecimals: field.decimals
-                },
-                threshold: field.threshold,
-                visible: field.enabled_by_default
-              };
-            });
-          });
-      }
-
-      var promises = channelKeys.map(function(channel) {
-        return loadThingSpeakChannel(channel.channelNumber, channel.key, channel.fieldList);
-      });
-
-      Promise.all(promises)
-        .then(function() {
-          // Add series in the predefined order
-          axesOrder.forEach(function(axis) {
-            if (allSeries[axis.id]) {
-              console.log("Adding series:", axis.id);
-              dynamicChart.addSeries(allSeries[axis.id], false);
+function loadThingSpeakChannel(channelNumber, key) {
+  return $.getJSON(`https://api.thingspeak.com/channels/${channelNumber}/feeds.json?results=8000&api_key=${key}`)
+    .then(function (data) {
+      channelKeys.forEach(function (channel) {
+        channel.fieldList.forEach(function (field) {
+          var fieldData = [];
+          for (var h = 0; h < data.feeds.length; h++) {
+            var v = data.feeds[h]["field" + field.field];
+            if (v != null) {
+              var p = [getChartDate(data.feeds[h].created_at), parseFloat(v)];
+              fieldData.push(p);
             }
-          });
-
-          dynamicChart.redraw();
-
-          // Hide loading indicator
-          dynamicChart.hideLoading();
-
-          // Debug logging
-          console.log("Final chart configuration:");
-          dynamicChart.yAxis.forEach(function(axis) {
-            console.log("Axis:", axis.options.id, "offset:", axis.options.offset);
-          });
-          dynamicChart.series.forEach(function(series) {
-            console.log("Series:", series.name, "yAxis:", series.yAxis.options.id);
-          });
-        })
-        .catch(function(error) {
-          console.error("Error loading data:", error);
+          }
+          allSeries[field.axis] = {
+            id: field.field,
+            name: data.channel["field" + field.field],
+            data: fieldData,
+            yAxis: field.axis,
+            tooltip: {
+              valueDecimals: field.decimals
+            },
+            threshold: field.threshold,
+            visible: field.enabled_by_default
+          };
         });
+      });
     });
+}
+
+loadThingSpeakChannel(channelKeys[0].channelNumber, channelKeys[0].key)
+  .then(function () {
+    axesOrder.forEach(function (axis) {
+      if (allSeries[axis.id]) {
+        dynamicChart.addSeries(allSeries[axis.id], false);
+      }
+    });
+
+    dynamicChart.redraw();
+    dynamicChart.hideLoading();
+  })
+  .catch(function (error) {
+    console.error("Error loading data:", error);
+  });
+});
   </script>
   <title>SmartHome | BMS DATA</title>
 </head>
