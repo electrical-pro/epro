@@ -10,97 +10,45 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highstock/6.0.3/modules/exporting.js"></script>
 
   <style>
-
     body {
         background-color: #000000;
         color: white;
         height: 100%;
         margin: 0;
     }
-
     html {
-    height: 100%;
-    margin: 0;
+      height: 100%;
+      margin: 0;
     }
-
     #chart-container {
-        height: 100%; /* or a percentage relative to the parent */
-        box-sizing: border-box; /* include padding/border in the height */
+        height: 100%;
+        box-sizing: border-box;
     }
-    
-		 
-    #buttonSSS {
+    #buttonSSS, #buttonLoad, .buttt, #Loads {
       background-color:#004b5ef8;
-      -moz-border-radius:6px;
-      -webkit-border-radius:6px;
       border-radius:6px;
-      padding:3px ;
+      padding:3px;
       color:#ffffff;
       border:0px;
       outline: none;
-      
-      }
-      
-    #buttonSSS:hover {
+    }
+    #buttonSSS:hover, #buttonLoad:hover {
       background-color:#0081a1f8;
     }
-    
-    #buttonSSS:active {
-      background-color: #003495;
+    #buttonSSS:active, #buttonLoad:active {
       box-shadow: 0 1px #666;
       transform: translateY(1px);
     }
-    
-    
     #buttonLoad {
       background-color:#691335;
-      -moz-border-radius:6px;
-      -webkit-border-radius:6px;
-      border-radius:6px;
-      padding:3px ;
-      color:#ffffff;
-      border:0px;
-      outline: none;
-      
     }
-    
     #buttonLoad:hover {
       background-color:#c20f42;
     }
-    
     #buttonLoad:active {
       background-color: #870117;
-      box-shadow: 0 1px #666;
-      transform: translateY(1px);
     }
-    
-    .buttt {
-      background-color:#004b5ef8;
-      -moz-border-radius:6px;
-      -webkit-border-radius:6px;
-      border-radius:6px;
-      color:#ffffff;
-      padding:2px ;
-      border:0px;
-      outline: none;
-      
-    
-    }
-    
-    #Loads {
-      background-color:#004b5ef8;
-      -moz-border-radius:6px;
-      -webkit-border-radius:6px;
-      border-radius:6px;
-      color:#ffffff;
-      padding:2px ;
-      border:0px;
-      outline: none;
-      
-    
-    }
-
-      </style>
+  </style>
   
   <script>
     Highcharts.setOptions({
@@ -181,8 +129,6 @@
 
     var dynamicChart;
     var channelsLoaded = 0;
-
-    // Define the order and properties of axes
     var axesOrder = [
       { id: 'V', title: 'Voltage' },
       { id: 'A', title: 'Current' },
@@ -209,21 +155,25 @@
       dynamicChart = new Highcharts.stockChart('chart-container', {
         chart: {
           events: {
-            load: function () {}
+            load: function () {
+              setInterval(updateChart, 60000); // Update chart every minute
+            }
           }
         },
         rangeSelector: {
-            buttons: [{ count: 1, type: 'hour', text: '1H' },
-          { count: 3, type: 'hour', text: '3H' },
-          { count: 6, type: 'hour', text: '6H' },
-          { count: 12, type: 'hour', text: '12H' },
-          { count: 1, type: 'day', text: 'D' },
-          { count: 3, type: 'day', text: '3D' },
-          { count: 1, type: 'week', text: 'W' },
-          { count: 1, type: 'month', text: 'M' },
-          { count: 6, type: 'month', text: '6M' },
-          { count: 1, type: 'year', text: 'Y' },
-          { type: 'all', text: 'All' }],
+          buttons: [
+            { count: 1, type: 'hour', text: '1H' },
+            { count: 3, type: 'hour', text: '3H' },
+            { count: 6, type: 'hour', text: '6H' },
+            { count: 12, type: 'hour', text: '12H' },
+            { count: 1, type: 'day', text: 'D' },
+            { count: 3, type: 'day', text: '3D' },
+            { count: 1, type: 'week', text: 'W' },
+            { count: 1, type: 'month', text: 'M' },
+            { count: 6, type: 'month', text: '6M' },
+            { count: 1, type: 'year', text: 'Y' },
+            { type: 'all', text: 'All' }
+          ],
           inputEnabled: true,
           selected: 11
         },
@@ -247,7 +197,6 @@
               }
             },
             opposite: false,
-            //offset: 20,
             lineWidth: 1,
             labels: {
               align: 'right',
@@ -266,7 +215,6 @@
         },
         exporting: { enabled: false },
         navigator: { enabled: false },
-
         loading: {
           labelStyle: {
             color: 'white',
@@ -279,56 +227,77 @@
         }
       });
 
-      // Show loading indicator
       dynamicChart.showLoading();
 
       var last_date;
       var allSeries = {};
 
-function loadThingSpeakChannel(channelNumber, key) {
-  return $.getJSON(`https://api.thingspeak.com/channels/${channelNumber}/feeds.json?results=8000&api_key=${key}`)
-    .then(function (data) {
-      channelKeys.forEach(function (channel) {
-        channel.fieldList.forEach(function (field) {
-          var fieldData = [];
-          for (var h = 0; h < data.feeds.length; h++) {
-            var v = data.feeds[h]["field" + field.field];
-            if (v != null) {
-              var p = [getChartDate(data.feeds[h].created_at), parseFloat(v)];
-              fieldData.push(p);
-            }
-          }
-          allSeries[field.axis] = {
-            id: field.field,
-            name: data.channel["field" + field.field],
-            data: fieldData,
-            yAxis: field.axis,
-            tooltip: {
-              valueDecimals: field.decimals
-            },
-            threshold: field.threshold,
-            visible: field.enabled_by_default
-          };
-        });
-      });
-    });
-}
+      function loadThingSpeakChannel(channelNumber, key) {
+        return $.getJSON(`https://api.thingspeak.com/channels/${channelNumber}/feeds.json?results=8000&api_key=${key}`)
+          .then(function (data) {
+            channelKeys.forEach(function (channel) {
+              channel.fieldList.forEach(function (field) {
+                var fieldData = [];
+                for (var h = 0; h < data.feeds.length; h++) {
+                  var v = data.feeds[h]["field" + field.field];
+                  if (v != null) {
+                    var p = [getChartDate(data.feeds[h].created_at), parseFloat(v)];
+                    fieldData.push(p);
+                  }
+                }
+                allSeries[field.axis] = {
+                  id: field.field,
+                  name: data.channel["field" + field.field],
+                  data: fieldData,
+                  yAxis: field.axis,
+                  tooltip: {
+                    valueDecimals: field.decimals
+                  },
+                  threshold: field.threshold,
+                  visible: field.enabled_by_default
+                };
+              });
+            });
+          });
+      }
 
-loadThingSpeakChannel(channelKeys[0].channelNumber, channelKeys[0].key)
-  .then(function () {
-    axesOrder.forEach(function (axis) {
-      if (allSeries[axis.id]) {
-        dynamicChart.addSeries(allSeries[axis.id], false);
+      loadThingSpeakChannel(channelKeys[0].channelNumber, channelKeys[0].key)
+        .then(function () {
+          axesOrder.forEach(function (axis) {
+            if (allSeries[axis.id]) {
+              dynamicChart.addSeries(allSeries[axis.id], false);
+            }
+          });
+          dynamicChart.redraw();
+          dynamicChart.hideLoading();
+        })
+        .catch(function (error) {
+          console.error("Error loading data:", error);
+        });
+
+      function updateChart() {
+        $.getJSON('https://api.thingspeak.com/channels/2598250/feed/last.json?api_key=NZTXVJP3YLDX1HF3')
+          .done(function (data) {
+            var series = dynamicChart.series;
+            var newPoint = [];
+            var pointTime = getChartDate(data.created_at);
+            
+            series.forEach(function (s) {
+              if (s.userOptions.id) {
+                var fieldIndex = s.userOptions.id;
+                var fieldData = data['field' + fieldIndex];
+                if (fieldData != null) {
+                  newPoint = [pointTime, parseFloat(fieldData)];
+                  s.addPoint(newPoint, true, true); // Add new point to series
+                }
+              }
+            });
+          })
+          .fail(function (error) {
+            console.error("Error updating data:", error);
+          });
       }
     });
-
-    dynamicChart.redraw();
-    dynamicChart.hideLoading();
-  })
-  .catch(function (error) {
-    console.error("Error loading data:", error);
-  });
-});
   </script>
   <title>SmartHome | BMS DATA</title>
 </head>
