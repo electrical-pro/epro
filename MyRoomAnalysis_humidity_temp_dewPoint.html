@@ -96,8 +96,8 @@
 	
 Highcharts.setOptions({
 
-colors: ['#ff0000', '#5f81e8', '#FFFF33', '#ff0066', '#f4740b', 
-   '#e4d354', '#2b908f', '#f45b5b', '#91e8e1'],
+colors: ['#3366ff',  '#ff0000', '#f4740b', '#00FF5D', 
+   '#FFFF33', '#e4d354', '#2b908f', '#f45b5b', '#91e8e1'],
 
 
   chart: {
@@ -215,20 +215,20 @@ var channelsLoaded = 0;
 // the 'T' Temperature left axis, or the 'O' Other right axis.
 var channelKeys =[];
 
-channelKeys.push({channelNumber:2598250, name:'Voltage',key:'NZTXVJP3YLDX1HF3',
-   fieldList:[{field:1,axis:'V'}]});
+channelKeys.push({channelNumber:300978, name:'Humidity',key:'UAYSQJX8RLH1XLKV',
+   fieldList:[{field:6,axis:'P'}]});
    
-channelKeys.push({channelNumber:2598250, name:'Current',key:'NZTXVJP3YLDX1HF3',
-   fieldList:[{field:2,axis:'A'}]});
+channelKeys.push({channelNumber:300978, name:'Inside',key:'UAYSQJX8RLH1XLKV',
+   fieldList:[{field:1,axis:'T'}]});
+   
+channelKeys.push({channelNumber:323332, name:'DewPoint',key:'DZM7N6223QG6OA4M',
+   fieldList:[{field:1,axis:'D'}]});
 
-channelKeys.push({channelNumber:2598250, name:'Power',key:'NZTXVJP3YLDX1HF3',
-  fieldList:[{field:3,axis:'W'}]});
+channelKeys.push({channelNumber:323332, name:'AbsoluteHumidity',key:'DZM7N6223QG6OA4M',
+   fieldList:[{field:2,axis:'X'}]});   
 
-channelKeys.push({channelNumber:2598250, name:'SOC',key:'NZTXVJP3YLDX1HF3',
-  fieldList:[{field:4,axis:'SOC'}]});
-
-channelKeys.push({channelNumber:2598250, name:'AvrCellVol',key:'NZTXVJP3YLDX1HF3',
-  fieldList:[{field:7,axis:'avrV'}]});
+channelKeys.push({channelNumber:323332, name:'Humidex',key:'DZM7N6223QG6OA4M',
+   fieldList:[{field:3,axis:'H'}]});  
     
 // user's timezone offset
 var myOffset = new Date().getTimezoneOffset();
@@ -392,19 +392,57 @@ $(document).ready(function()
 			}
 		},
 rangeSelector: {
-  buttons: [{ count: 1, type: 'hour', text: '1H' },
-          { count: 3, type: 'hour', text: '3H' },
-          { count: 6, type: 'hour', text: '6H' },
-          { count: 12, type: 'hour', text: '12H' },
-          { count: 1, type: 'day', text: 'D' },
-          { count: 3, type: 'day', text: '3D' },
-          { count: 1, type: 'week', text: 'W' },
-          { count: 1, type: 'month', text: 'M' },
-          { count: 6, type: 'month', text: '6M' },
-          { count: 1, type: 'year', text: 'Y' },
-          { type: 'all', text: 'All' }],
-          inputEnabled: true,
-          selected: 5
+			buttons: [ {
+				count: 1,
+				type: 'hour',
+				text: '1H'
+      },
+{
+				count: 3,
+				type: 'hour',
+				text: '3H'
+      },	  {
+				count: 6,
+				type: 'hour',
+				text: '6H'
+      },
+	  {
+				count: 12,
+				type: 'hour',
+				text: '12H'
+      },
+	  {
+				count: 1,
+				type: 'day',
+				text: 'D'
+      },
+{
+				count: 3,
+				type: 'day',
+				text: '3D'
+      },	  {
+				count: 1,
+				type: 'week',
+				text: 'W'
+      }, {
+				count: 1,
+				type: 'month',
+				text: 'M'
+      },
+{
+				count: 6,
+				type: 'month',
+				text: '6M'
+      },	  {
+				count: 1,
+				type: 'year',
+				text: 'Y'
+			}, {
+				type: 'all',
+				text: 'All'
+			}],
+			inputEnabled: true,
+			selected: 5
 		},
     title: {
 			text: ''
@@ -430,7 +468,7 @@ rangeSelector: {
 			}
 		},
     tooltip: {
-      // valueDecimals: 2,
+      valueDecimals: 2,
       valueSuffix: '',
 	
 
@@ -458,60 +496,60 @@ rangeSelector: {
 		
             title: {
 
-                text: 'Battery Votage / V'
+                text: 'Humidity | %'
 				
             },
-            id: 'V',
+            id: 'P',
             showEmpty: false,
-            min: 10
+            
 
     }, {
 	
             title: {
-                text: 'Battery current / A'
+                text: 'Temp | C'
 
             },
             
-            id: 'A',
+            id: 'T',
             showEmpty: false,
-          }, {
-        
-        title: {
-            text: 'Battery Power / W'
+			
+			
+    },{
+	
+            title: {
+                text: 'DewPoint | C'
 
-        },
-  
-      id: 'W',
-      showEmpty: false,
-    }, {
-      
-      title: {
-          text: 'SOC / %'
+            },
+            
+            id: 'D',
+            showEmpty: false,
+			
+			
+    },{
+	
+  title: {
+       text: 'Humidex'
 
-      },
-      
-      id: 'SOC',
-      showEmpty: false,
-      // min: 0, max: 100
-    }, {
-      
-      title: {
-          text: 'Avrage Cell Voltage / V'
-
-      },
-      
-      id: 'avrV',
-      showEmpty: false,
-      min: 2.9
     },
-     {
+
+  id: 'H',
+  showEmpty: false,
+    },{
+	
+       title: {
+        text: 'AbsoluteHumidity | g/m3'
+
+         },
+  
+       id: 'X',
+       showEmpty: false,
+
+   },	{
     }],
-					  plotOptions: {          ////////////////////////////////////////////////HERE What I DID
-                series: {
-			      fillOpacity: 0.3,
-            threshold: 0,
-            // negativeColor: '#F70366',
-            // color: '#2B88F5',
+					    plotOptions: {          ////////////////////////////////////////////////HERE What I DID
+        series: {
+            threshold: null,
+			fillOpacity: 0.2
         }
     },                                      ////////////////////////////////////////////////////////////////
 		exporting: {
@@ -645,7 +683,7 @@ function loadChannelHistory(sentChannelIndex,channelNumber,key,sentFieldList,sen
 }
 
   </script>
-    <title>SmartHome | BMS DATA</title>
+    <title>SmartHome | Humidity and Temperature</title>
   </head>
   <body style="                      background-color: #000000; color: white;">
     <div id="chart-container"><br>
