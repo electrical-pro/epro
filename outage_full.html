@@ -352,7 +352,7 @@
     <script>
         document.addEventListener("DOMContentLoaded", function() {
             const timestamp = new Date().getTime();
-            const url = `https://api.thingspeak.com/channels/1288695/feed.json?offset=0&results=3400&key=KMPJJFINTMO4GWQK&_=${timestamp}`;
+            const url = `https://api.thingspeak.com/channels/1288695/fields/1.json?offset=0&results=3400&key=KMPJJFINTMO4GWQK&_=${timestamp}`;
 
             fetch(url)
                 .then(response => response.json())
