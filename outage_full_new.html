@@ -20,6 +20,7 @@
             padding: 20px;
             position: relative;
             overflow-x: hidden;
+            width: 100%;
         }
 
         body::before {
@@ -46,6 +47,7 @@
             margin: 0 auto;
             position: relative;
             z-index: 1;
+            width: 100%;
         }
 
         h1 {
@@ -244,22 +246,29 @@
         }
 
         @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
             h1 {
-                font-size: 2em;
+                font-size: 1.8em;
                 margin: 20px 0;
             }
 
             .status-card {
                 padding: 15px;
+                border-radius: 15px;
             }
 
             .styled-table {
                 font-size: 0.75em;
+                border-radius: 10px;
             }
 
             .styled-table th,
             .styled-table td {
                 padding: 10px 5px;
+                word-break: break-word;
             }
 
             .chart-container {
@@ -268,13 +277,17 @@
             }
 
             .last-update {
-                font-size: 0.9em;
+                font-size: 0.85em;
                 padding: 10px;
             }
 
             .status-badge {
                 font-size: 0.75em;
                 padding: 6px 12px;
+            }
+
+            h2 {
+                font-size: 1.4em;
             }
         }
     </style>
