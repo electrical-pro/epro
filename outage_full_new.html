@@ -102,6 +102,15 @@
             border-radius: 15px;
             overflow: hidden;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            display: block;
+            overflow-x: auto;
+        }
+
+        .styled-table thead,
+        .styled-table tbody {
+            display: table;
+            width: 100%;
+            table-layout: fixed;
         }
 
         .styled-table thead tr {
@@ -240,17 +249,32 @@
                 margin: 20px 0;
             }
 
+            .status-card {
+                padding: 15px;
+            }
+
             .styled-table {
-                font-size: 0.85em;
+                font-size: 0.75em;
             }
 
             .styled-table th,
             .styled-table td {
-                padding: 12px 8px;
+                padding: 10px 5px;
             }
 
             .chart-container {
-                padding: 20px;
+                padding: 15px;
+                height: 300px;
+            }
+
+            .last-update {
+                font-size: 0.9em;
+                padding: 10px;
+            }
+
+            .status-badge {
+                font-size: 0.75em;
+                padding: 6px 12px;
             }
         }
     </style>
