@@ -8,8 +8,12 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
-            --primary: #00c6ff;
-            --secondary: #0072ff;
+            --primary: #006986;
+            --secondary: #007566;
+
+            --primary_txt: #00c8ff;
+            --secondary_txt: #00ffdd;
+
             --success: #00d2ff;
             --danger: #ff416c;
             --dark: #0f172a;
@@ -54,7 +58,7 @@
         h1 {
             font-size: 1.8rem;
             margin-bottom: 10px;
-            background: linear-gradient(to right, var(--primary), var(--secondary));
+            background: linear-gradient(to right, var(--primary_txt), var(--secondary_txt));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             text-shadow: 0 0 20px rgba(0, 198, 255, 0.3);
@@ -84,8 +88,8 @@
         }
 
         .card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+            /* transform: translateY(-1px); */
+            box-shadow: 0 12px 30px rgba(0, 255, 242, 0.041);
         }
 
         .card-header {
@@ -132,17 +136,21 @@
             transition: var(--transition);
         }
 
-        .styled-table tbody tr:hover {
-            background: rgba(255, 255, 255, 0.05);
-        }
+
 
         .styled-table tbody tr.power-row {
-            background-color: rgba(0, 210, 255, 0.05);
+            background-color: rgba(0, 87, 107, 0.144);
         }
 
         .styled-table tbody tr.blackout-row {
-            background-color: rgba(255, 65, 108, 0.05);
+            background-color: rgba(2, 27, 56, 0.308);
         }
+
+
+        .styled-table tbody tr:hover {
+            background: rgb(78, 16, 45);
+        }
+
 
         .status-badge {
             padding: 4px 8px;
@@ -171,6 +179,11 @@
             transition: var(--transition);
             margin-top: 20px;
             height: 400px;
+        }
+
+        .chart-container:hover {
+            /* transform: translateY(-1px); */
+            box-shadow: 0 12px 30px rgba(0, 255, 242, 0.041);
         }
 
         .chart-header {
@@ -281,6 +294,7 @@
             .chart-container {
                 height: 350px;
                 padding: 15px;
+                padding-bottom: 17%;
             }
         }
 
@@ -295,6 +309,7 @@
             
             .chart-container {
                 height: 450px;
+                padding-bottom: 7%;
             }
         }
 
@@ -344,7 +359,7 @@
         </div>
         
         <footer>
-            <p>Power Outage Analysis Dashboard &copy; 2023 | Real-time Monitoring System</p>
+            <p>Power Outage Analysis Dashboard &copy; 2025 | Serhii B.</p>
         </footer>
     </div>
 
@@ -352,7 +367,7 @@
     <script>
         document.addEventListener("DOMContentLoaded", function() {
             const timestamp = new Date().getTime();
-            const url = `https://api.thingspeak.com/channels/1288695/fields/1.json?offset=0&results=3400&key=KMPJJFINTMO4GWQK&_=${timestamp}`;
+            const url = `https://api.thingspeak.com/channels/1288695/fields/1.json?offset=0&results=5400&key=KMPJJFINTMO4GWQK&_=${timestamp}`;
 
             fetch(url)
                 .then(response => response.json())
