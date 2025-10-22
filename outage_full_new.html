@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="shortcut icon" type="image/ico" href="https://wp-assets.highcharts.com/www-highcharts-com/blog/wp-content/uploads/2021/05/19085042/favicon-1.ico"/>
+    <title>Power Outage Analysis</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1a2e 50%, #16213e 100%);
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            padding: 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(0, 255, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(255, 0, 255, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+            animation: pulse 8s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 0.8; }
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        h1 {
+            font-size: 3em;
+            text-align: center;
+            margin: 40px 0;
+            background: linear-gradient(135deg, #00f5ff 0%, #00a6ff 50%, #0066ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 40px rgba(0, 245, 255, 0.3);
+            animation: titleGlow 3s ease-in-out infinite;
+        }
+
+        @keyframes titleGlow {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.3); }
+        }
+
+        .status-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 40px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            animation: slideUp 0.6s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        h2 {
+            font-size: 1.8em;
+            margin-bottom: 30px;
+            text-align: center;
+            color: #00f5ff;
+            text-shadow: 0 0 20px rgba(0, 245, 255, 0.5);
+        }
+
+        .styled-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .styled-table thead tr {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #00f5ff;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+
+        .styled-table th {
+            padding: 20px 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-align: center;
+        }
+
+        .styled-table td {
+            padding: 18px 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            text-align: center;
+        }
+
+        .styled-table tbody tr {
+            transition: all 0.3s ease;
+            animation: fadeIn 0.5s ease-out backwards;
+        }
+
+        .styled-table tbody tr:nth-child(1) { animation-delay: 0.1s; }
+        .styled-table tbody tr:nth-child(2) { animation-delay: 0.15s; }
+        .styled-table tbody tr:nth-child(3) { animation-delay: 0.2s; }
+        .styled-table tbody tr:nth-child(4) { animation-delay: 0.25s; }
+        .styled-table tbody tr:nth-child(5) { animation-delay: 0.3s; }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .styled-table tbody tr:hover {
+            background: rgba(0, 245, 255, 0.1) !important;
+            transform: translateX(5px);
+            box-shadow: 0 0 20px rgba(0, 245, 255, 0.3);
+        }
+
+        .styled-table tbody tr.power-row {
+            background: linear-gradient(90deg, rgba(34, 199, 182, 0.2) 0%, rgba(34, 199, 182, 0.05) 100%);
+        }
+
+        .styled-table tbody tr.blackout-row {
+            background: linear-gradient(90deg, rgba(224, 36, 74, 0.2) 0%, rgba(224, 36, 74, 0.05) 100%);
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 0.85em;
+            letter-spacing: 1px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .status-badge.power {
+            background: linear-gradient(135deg, #22c7b6 0%, #1a9d8f 100%);
+            box-shadow: 0 0 20px rgba(34, 199, 182, 0.5);
+        }
+
+        .status-badge.blackout {
+            background: linear-gradient(135deg, #e0244a 0%, #b01d3a 100%);
+            box-shadow: 0 0 20px rgba(224, 36, 74, 0.5);
+            animation: pulse-red 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-red {
+            0%, 100% { box-shadow: 0 0 20px rgba(224, 36, 74, 0.5); }
+            50% { box-shadow: 0 0 30px rgba(224, 36, 74, 0.8); }
+        }
+
+        .chart-container {
+            margin-top: 30px;
+            padding: 30px;
+            position: relative;
+            height: 400px;
+        }
+
+        canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        .last-update {
+            text-align: center;
+            margin-top: 30px;
+            padding: 15px;
+            background: rgba(0, 245, 255, 0.1);
+            border-radius: 10px;
+            border: 1px solid rgba(0, 245, 255, 0.3);
+            font-size: 1.1em;
+            color: #00f5ff;
+            box-shadow: 0 0 20px rgba(0, 245, 255, 0.2);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px;
+            font-size: 1.3em;
+            color: #00f5ff;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(0, 245, 255, 0.3);
+            border-top-color: #00f5ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2em;
+                margin: 20px 0;
+            }
+
+            .styled-table {
+                font-size: 0.85em;
+            }
+
+            .styled-table th,
+            .styled-table td {
+                padding: 12px 8px;
+            }
+
+            .chart-container {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚡ Power Outage Tracker</h1>
+        <div id="results" class="loading">
+            <div class="spinner"></div>
+            <p>Loading data...</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const timestamp = new Date().getTime();
+            const url = `https://api.thingspeak.com/channels/1288695/feed.json?offset=0&results=3400&key=KMPJJFINTMO4GWQK&_=${timestamp}`;
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    const feeds = data.feeds;
+                    const gaps = findDataGaps(feeds);
+                    displayGaps(gaps, feeds);
+                    createOutageChart(gaps);
+                })
+                .catch(error => {
+                    console.error('Error fetching data:', error);
+                    document.getElementById('results').innerHTML = '<p class="error">Error loading data. Please refresh the page.</p>';
+                });
+
+            function findDataGaps(feeds) {
+                const threeMinutes = 5 * 60 * 1000;
+                const gaps = [];
+
+                for (let i = 1; i < feeds.length; i++) {
+                    const previousTime = new Date(feeds[i - 1].created_at).getTime();
+                    const currentTime = new Date(feeds[i].created_at).getTime();
+                    const difference = currentTime - previousTime;
+
+                    if (difference >= threeMinutes) {
+                        const gapDurationMinutes = difference / (60 * 1000);
+                        gaps.push({
+                            start: feeds[i - 1].created_at,
+                            end: feeds[i].created_at,
+                            duration: gapDurationMinutes,
+                            hasPower: false
+                        });
+                    } else {
+                        if (i == 1 || gaps[gaps.length - 1].hasPower === false) {
+                            gaps.push({
+                                start: feeds[i - 1].created_at,
+                                end: feeds[i].created_at,
+                                duration: difference / (60 * 1000),
+                                hasPower: true
+                            });
+                        } else {
+                            gaps[gaps.length - 1].end = feeds[i].created_at;
+                            gaps[gaps.length - 1].duration += difference / (60 * 1000);
+                        }
+                    }
+                }
+
+                const lastTime = new Date(feeds[feeds.length - 1].created_at).getTime();
+                const now = new Date().getTime();
+                const currentDifference = now - lastTime;
+
+                if (currentDifference >= threeMinutes) {
+                    const ongoingDurationMinutes = currentDifference / (60 * 1000);
+                    gaps.push({
+                        start: feeds[feeds.length - 1].created_at,
+                        end: 'ongoing',
+                        duration: ongoingDurationMinutes,
+                        hasPower: false
+                    });
+                } else {
+                    if (gaps.length > 0 && gaps[gaps.length - 1].hasPower) {
+                        gaps[gaps.length - 1].end = new Date().toISOString();
+                        gaps[gaps.length - 1].duration += currentDifference / (60 * 1000);
+                    } else {
+                        gaps.push({
+                            start: feeds[feeds.length - 1].created_at,
+                            end: new Date().toISOString(),
+                            duration: currentDifference / (60 * 1000),
+                            hasPower: true
+                        });
+                    }
+                }
+
+                return gaps;
+            }
+
+            function displayGaps(gaps, feeds) {
+                const resultsDiv = document.getElementById('results');
+                resultsDiv.innerHTML = '';
+
+                const statusCard = document.createElement('div');
+                statusCard.className = 'status-card';
+                statusCard.innerHTML = '<h2>Power / Blackout Periods</h2>';
+
+                if (gaps.length === 0) {
+                    statusCard.innerHTML += '<p style="text-align: center; font-size: 1.2em;">No power outages detected</p>';
+                } else {
+                    const table = document.createElement('table');
+                    table.classList.add('styled-table');
+                    table.innerHTML = `
+                        <thead>
+                            <tr>
+                                <th>Start Time</th>
+                                <th>End Time</th>
+                                <th>Duration</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    `;
+
+                    const tbody = table.querySelector('tbody');
+
+                    gaps.forEach(gap => {
+                        const localStart = formatDateTime(gap.start);
+                        let localEnd = gap.end === 'ongoing' ? 'Ongoing' : formatDateTime(gap.end);
+                        const hours = Math.floor(gap.duration / 60);
+                        const minutes = Math.floor(gap.duration % 60);
+                        const row = document.createElement('tr');
+                        row.classList.add(gap.hasPower ? 'power-row' : 'blackout-row');
+                        row.innerHTML = `
+                            <td>${localStart}</td>
+                            <td>${localEnd}</td>
+                            <td>${hours}h ${minutes}m</td>
+                            <td><span class="status-badge ${gap.hasPower ? 'power' : 'blackout'}">${gap.hasPower ? '✓ Power' : '✗ Blackout'}</span></td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+
+                    statusCard.appendChild(table);
+                }
+
+                // Add chart inside the same card
+                const chartDiv = document.createElement('div');
+                chartDiv.className = 'chart-container';
+                chartDiv.innerHTML = '<canvas id="outageChart"></canvas>';
+                statusCard.appendChild(chartDiv);
+
+                const lastUpdate = new Date(feeds[feeds.length - 1].created_at);
+                const lastUpdateFormatted = formatDateTime(lastUpdate);
+                const lastTime = new Date(feeds[feeds.length - 1].created_at).getTime();
+                const now = new Date().getTime();
+                const currentDifference = now - lastTime;
+                const threeMinutes = 5 * 60 * 1000;
+
+                if (currentDifference < threeMinutes) {
+                    statusCard.innerHTML += `<div class="last-update">🟢 Last update: ${lastUpdateFormatted} | Status: No blackout detected</div>`;
+                } else {
+                    statusCard.innerHTML += `<div class="last-update">🔴 Last update: ${lastUpdateFormatted} | Status: Blackout detected</div>`;
+                }
+
+                resultsDiv.appendChild(statusCard);
+            }
+
+            function formatDateTime(dateTime) {
+                const date = new Date(dateTime);
+                const day = String(date.getDate()).padStart(2, '0');
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const year = date.getFullYear();
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                const seconds = String(date.getSeconds()).padStart(2, '0');
+
+                return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+            }
+
+            function createOutageChart(gaps) {
+                const labels = gaps.map(gap => {
+                    const start = formatDateTime(gap.start);
+                    const end = gap.end === 'ongoing' ? 'Ongoing' : formatDateTime(gap.end);
+                    return `${start} - ${end}`;
+                });
+                const data = gaps.map(gap => gap.duration);
+                const datasets = [
+                    {
+                        label: 'Blackout Duration',
+                        data: data.map((duration, index) => !gaps[index].hasPower ? duration : 0),
+                        backgroundColor: 'rgba(224, 36, 74, 0.8)',
+                        borderColor: '#e0244a',
+                        borderWidth: 2,
+                    },
+                    {
+                        label: 'Power Duration',
+                        data: data.map((duration, index) => gaps[index].hasPower ? duration : 0),
+                        backgroundColor: 'rgba(34, 199, 182, 0.8)',
+                        borderColor: '#22c7b6',
+                        borderWidth: 2,
+                    }
+                ];
+
+                const ctx = document.getElementById('outageChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: datasets
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                stacked: true,
+                                grid: {
+                                    color: 'rgba(255, 255, 255, 0.1)',
+                                },
+                                ticks: {
+                                    color: '#00f5ff',
+                                    font: {
+                                        size: 11
+                                    }
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'Periods',
+                                    color: '#00f5ff',
+                                    font: {
+                                        size: 14,
+                                        weight: 'bold'
+                                    }
+                                }
+                            },
+                            y: {
+                                stacked: true,
+                                grid: {
+                                    color: 'rgba(255, 255, 255, 0.1)',
+                                },
+                                ticks: {
+                                    color: '#00f5ff',
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'Duration (minutes)',
+                                    color: '#00f5ff',
+                                    font: {
+                                        size: 14,
+                                        weight: 'bold'
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: true,
+                                labels: {
+                                    color: '#ffffff',
+                                    font: {
+                                        size: 14
+                                    },
+                                    padding: 20
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                titleColor: '#00f5ff',
+                                bodyColor: '#ffffff',
+                                borderColor: '#00f5ff',
+                                borderWidth: 1,
+                                padding: 15,
+                                callbacks: {
+                                    label: function(context) {
+                                        const label = context.dataset.label || '';
+                                        const value = context.raw;
+                                        const hours = Math.floor(value / 60);
+                                        const minutes = Math.floor(value % 60);
+                                        return `${label}: ${hours}h ${minutes}m`;
+                                    }
+                                }
+                            }
+                        },
+                        animation: {
+                            duration: 1500,
+                            easing: 'easeOutQuart'
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
