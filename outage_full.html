@@ -4,88 +4,354 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="shortcut icon" type="image/ico" href="https://wp-assets.highcharts.com/www-highcharts-com/blog/wp-content/uploads/2021/05/19085042/favicon-1.ico"/>
-    <title>Power Outage Analysis</title>
+    <title>Power Outage Analysis Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        :root {
+            --primary: #00c6ff;
+            --secondary: #0072ff;
+            --success: #00d2ff;
+            --danger: #ff416c;
+            --dark: #0f172a;
+            --darker: #0a0f1c;
+            --light: #e2e8f0;
+            --card-bg: rgba(15, 23, 42, 0.7);
+            --glass: rgba(255, 255, 255, 0.05);
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            background-color: #000000;
-            color: #ffffff;
-            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, var(--darker) 0%, var(--dark) 100%);
+            color: var(--light);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            min-height: 100vh;
+            padding: 15px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
             text-align: center;
+            margin-bottom: 25px;
+            padding: 20px 15px;
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
         }
 
         h1 {
-            margin-top: 20px;
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px rgba(0, 198, 255, 0.3);
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            color: #94a3b8;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+            transition: var(--transition);
+        }
+
+        .card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .card-header i {
+            font-size: 1.3rem;
+            margin-right: 10px;
+            color: var(--primary);
+        }
+
+        .card-header h2 {
+            font-size: 1.3rem;
+            font-weight: 600;
         }
 
         .styled-table {
-            margin: 25px auto;
+            width: 100%;
             border-collapse: collapse;
-            font-size: 0.9em;
-            min-width: 400px;
-            background-color: rgb(31, 69, 54);
-            border-radius: 5px 5px 0 0;
+            font-size: 0.85rem;
+            border-radius: 8px;
             overflow: hidden;
+            margin-top: 10px;
         }
 
         .styled-table thead tr {
-            background-color: #131313;
-            color: #ffffff;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            color: white;
             text-align: left;
-            font-weight: bold;
+            font-weight: 600;
         }
 
         .styled-table th, .styled-table td {
-            padding: 12px 15px;
+            padding: 10px 12px;
         }
 
         .styled-table tbody tr {
-            border-bottom: 1px solid #e2e2e2;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            transition: var(--transition);
         }
 
-        .styled-table tbody tr:nth-of-type(odd) {
-            background-color: #00a6ac; /* Lighter for power */
-        }
-
-        .styled-table tbody tr:nth-of-type(even) {
-            background-color: #000d11; /* Darker for blackout */
-        }
-
-        .styled-table tbody tr:last-of-type {
-            border-bottom: 2px solid #ee6d04;
+        .styled-table tbody tr:hover {
+            background: rgba(255, 255, 255, 0.05);
         }
 
         .styled-table tbody tr.power-row {
-            background-color: #0d4042 !important;
+            background-color: rgba(0, 210, 255, 0.05);
         }
 
         .styled-table tbody tr.blackout-row {
-            background-color: #00161d !important;
+            background-color: rgba(255, 65, 108, 0.05);
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 15px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-power {
+            background: rgba(0, 210, 255, 0.2);
+            color: var(--success);
+        }
+
+        .status-blackout {
+            background: rgba(255, 65, 108, 0.2);
+            color: var(--danger);
         }
 
         .chart-container {
-            width: 90%;
-            max-width: 1000px;
-            margin: auto;
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+            transition: var(--transition);
+            margin-top: 20px;
+            height: 400px;
         }
 
-        @media (max-width: 600px) {
+        .chart-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .chart-header i {
+            font-size: 1.3rem;
+            margin-right: 10px;
+            color: var(--primary);
+        }
+
+        .chart-header h2 {
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            padding: 15px;
+            color: #94a3b8;
+            font-size: 0.85rem;
+        }
+
+        .loader {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 150px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(0, 198, 255, 0.2);
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .last-update {
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 15px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .status-message {
+            background: rgba(0, 210, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 15px;
+            text-align: center;
+            border: 1px solid rgba(0, 210, 255, 0.2);
+        }
+
+        .status-message i {
+            color: var(--success);
+            margin-right: 8px;
+        }
+
+        /* Mobile-first responsive design */
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+            
+            header {
+                padding: 15px 10px;
+                margin-bottom: 15px;
+            }
+            
+            h1 {
+                font-size: 1.5rem;
+            }
+            
+            .subtitle {
+                font-size: 0.9rem;
+            }
+            
+            .card, .chart-container {
+                padding: 15px;
+            }
+            
+            .card-header h2, .chart-header h2 {
+                font-size: 1.2rem;
+            }
+            
+            .styled-table {
+                font-size: 0.75rem;
+            }
+            
+            .styled-table th, .styled-table td {
+                padding: 8px 6px;
+            }
+            
             .chart-container {
-                width: 100%;
+                height: 350px;
+                padding: 15px;
+            }
+        }
+
+        @media (min-width: 768px) {
+            h1 {
+                font-size: 2.2rem;
+            }
+            
+            .card, .chart-container {
+                padding: 25px;
+            }
+            
+            .chart-container {
+                height: 450px;
+            }
+        }
+
+        @media (min-width: 992px) {
+            .chart-container {
+                height: 500px;
             }
         }
     </style>
 </head>
 <body>
-    <h1>Power Outage Analysis</h1>
-    <div id="results"></div>
-    <div class="chart-container">
-        <canvas id="outageChart"></canvas>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-bolt"></i> Power Outage Analysis Dashboard</h1>
+            <p class="subtitle">Real-time monitoring and analysis of power availability and blackout periods</p>
+        </header>
+
+        <div class="dashboard">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-table"></i>
+                    <h2>Power / Blackout Periods</h2>
+                </div>
+                
+                <div id="results">
+                    <div class="loader">
+                        <div class="spinner"></div>
+                    </div>
+                </div>
+                
+                <div class="last-update">
+                    <i class="fas fa-clock"></i> Last Update: <span id="lastUpdateTime">-</span>
+                </div>
+                
+                <div class="status-message" id="statusMessage" style="display: none;">
+                    <i class="fas fa-check-circle"></i> <span id="statusText">No blackout detected</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <div class="chart-header">
+                <i class="fas fa-chart-line"></i>
+                <h2>Outage Duration Analysis</h2>
+            </div>
+            <canvas id="outageChart"></canvas>
+        </div>
+        
+        <footer>
+            <p>Power Outage Analysis Dashboard &copy; 2023 | Real-time Monitoring System</p>
+        </footer>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         document.addEventListener("DOMContentLoaded", function() {
-            const timestamp = new Date().getTime(); // Get current timestamp
+            const timestamp = new Date().getTime();
             const url = `https://api.thingspeak.com/channels/1288695/feed.json?offset=0&results=3400&key=KMPJJFINTMO4GWQK&_=${timestamp}`;
 
             fetch(url)
@@ -95,8 +361,13 @@
                     const gaps = findDataGaps(feeds);
                     displayGaps(gaps, feeds);
                     createOutageChart(gaps);
+                    updateLastUpdateTime(feeds);
+                    updateStatusMessage(feeds);
                 })
-                .catch(error => console.error('Error fetching data:', error));
+                .catch(error => {
+                    console.error('Error fetching data:', error);
+                    document.getElementById('results').innerHTML = '<p>Error loading data. Please try again later.</p>';
+                });
 
             function findDataGaps(feeds) {
                 const threeMinutes = 5 * 60 * 1000; // three minutes in milliseconds
@@ -108,7 +379,7 @@
                     const difference = currentTime - previousTime;
 
                     if (difference >= threeMinutes) {
-                        const gapDurationMinutes = difference / (60 * 1000); // convert ms to minutes
+                        const gapDurationMinutes = difference / (60 * 1000);
                         gaps.push({
                             start: feeds[i - 1].created_at,
                             end: feeds[i].created_at,
@@ -136,7 +407,7 @@
                 const currentDifference = now - lastTime;
 
                 if (currentDifference >= threeMinutes) {
-                    const ongoingDurationMinutes = currentDifference / (60 * 1000); // convert ms to minutes
+                    const ongoingDurationMinutes = currentDifference / (60 * 1000);
                     gaps.push({
                         start: feeds[feeds.length - 1].created_at,
                         end: 'ongoing',
@@ -162,10 +433,10 @@
 
             function displayGaps(gaps, feeds) {
                 const resultsDiv = document.getElementById('results');
-                resultsDiv.innerHTML = '<h2>Power / Blackout Periods:</h2>';
+                resultsDiv.innerHTML = '';
 
                 if (gaps.length === 0) {
-                    resultsDiv.innerHTML += '<p>No power outages of 3 minutes or more detected.</p>';
+                    resultsDiv.innerHTML = '<p>No power outages of 3 minutes or more detected.</p>';
                 } else {
                     const table = document.createElement('table');
                     table.classList.add('styled-table');
@@ -184,7 +455,10 @@
 
                     const tbody = table.querySelector('tbody');
 
-                    gaps.forEach(gap => {
+                    // Show only the most recent 10 periods in the table for better performance
+                    const recentGaps = gaps.slice(-10);
+                    
+                    recentGaps.forEach(gap => {
                         const localStart = formatDateTime(gap.start);
                         let localEnd = gap.end === 'ongoing' ? 'Ongoing Blackout' : formatDateTime(gap.end);
                         const hours = Math.floor(gap.duration / 60);
@@ -194,31 +468,30 @@
                         row.innerHTML = `
                             <td>${localStart}</td>
                             <td>${localEnd}</td>
-                            <td>${hours} hours and ${minutes} minutes</td>
-                            <td>${gap.hasPower ? 'Power' : 'Blackout'}</td>
+                            <td>${hours}h ${minutes}m</td>
+                            <td><span class="status-badge ${gap.hasPower ? 'status-power' : 'status-blackout'}">${gap.hasPower ? 'Power' : 'Blackout'}</span></td>
                         `;
                         tbody.appendChild(row);
                     });
 
                     resultsDiv.appendChild(table);
-                }
-
-                // Show last update time
-                const lastUpdate = new Date(feeds[feeds.length - 1].created_at);
-                const lastUpdateFormatted = formatDateTime(lastUpdate);
-                const lastTime = new Date(feeds[feeds.length - 1].created_at).getTime();
-                const now = new Date().getTime();
-                const currentDifference = now - lastTime;
-
-                if (currentDifference < 1 * 60 * 1000) {
-                    resultsDiv.innerHTML += `<p>Last update: ${lastUpdateFormatted}. No blackout detected.</p>`;
+                    
+                    // Add a note if there are more periods
+                    if (gaps.length > 10) {
+                        const note = document.createElement('p');
+                        note.style.marginTop = '15px';
+                        note.style.textAlign = 'center';
+                        note.style.color = '#94a3b8';
+                        note.innerHTML = `Showing 10 most recent periods out of ${gaps.length} total`;
+                        resultsDiv.appendChild(note);
+                    }
                 }
             }
 
             function formatDateTime(dateTime) {
                 const date = new Date(dateTime);
                 const day = String(date.getDate()).padStart(2, '0');
-                const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are zero-based
+                const month = String(date.getMonth() + 1).padStart(2, '0');
                 const year = date.getFullYear();
                 const hours = String(date.getHours()).padStart(2, '0');
                 const minutes = String(date.getMinutes()).padStart(2, '0');
@@ -228,23 +501,28 @@
             }
 
             function createOutageChart(gaps) {
-                const labels = gaps.map(gap => {
-                    const start = formatDateTime(gap.start);
-                    const end = gap.end === 'ongoing' ? 'Ongoing Blackout' : formatDateTime(gap.end);
-                    return `${start} - ${end}`;
+                // Limit the number of data points to prevent performance issues
+                const maxDataPoints = 15;
+                const displayGaps = gaps.length > maxDataPoints ? gaps.slice(-maxDataPoints) : gaps;
+                
+                // Create simpler labels for the chart
+                const labels = displayGaps.map((gap, index) => {
+                    const date = new Date(gap.start);
+                    return `${date.getDate()}/${date.getMonth()+1} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
                 });
-                const data = gaps.map(gap => gap.duration);
-                const backgroundColors = gaps.map(gap => gap.hasPower ? '#22c7b6' : '#e0244a');
+                
                 const datasets = [
                     {
                         label: 'Blackout Duration',
-                        data: data.map((duration, index) => !gaps[index].hasPower ? duration : 0),
-                        backgroundColor: '#e0244a',
+                        data: displayGaps.map(gap => !gap.hasPower ? gap.duration : 0),
+                        backgroundColor: '#ff416c',
+                        borderRadius: 5,
                     },
                     {
                         label: 'Power Duration',
-                        data: data.map((duration, index) => gaps[index].hasPower ? duration : 0),
-                        backgroundColor: '#22c7b6',
+                        data: displayGaps.map(gap => gap.hasPower ? gap.duration : 0),
+                        backgroundColor: '#00d2ff',
+                        borderRadius: 5,
                     }
                 ];
 
@@ -257,39 +535,109 @@
                     },
                     options: {
                         responsive: true,
-                        scales: {
-                            x: {
-                                beginAtZero: true,
-                                title: {
-                                    display: true,
-                                    text: 'Periods'
-                                }
-                            },
-                            y: {
-                                title: {
-                                    display: true,
-                                    text: 'Duration (minutes)'
-                                }
-                            }
-                        },
+                        maintainAspectRatio: false,
                         plugins: {
                             legend: {
-                                display: true
+                                position: 'top',
+                                labels: {
+                                    color: '#e2e8f0',
+                                    font: {
+                                        size: window.innerWidth < 768 ? 10 : 12
+                                    }
+                                }
                             },
                             tooltip: {
                                 callbacks: {
+                                    title: function(tooltipItems) {
+                                        const gap = displayGaps[tooltipItems[0].dataIndex];
+                                        const start = formatDateTime(gap.start);
+                                        const end = gap.end === 'ongoing' ? 'Ongoing' : formatDateTime(gap.end);
+                                        return `${start} to ${end}`;
+                                    },
                                     label: function(context) {
                                         const label = context.dataset.label || '';
                                         const value = context.raw;
                                         const hours = Math.floor(value / 60);
                                         const minutes = Math.floor(value % 60);
-                                        return `${label}: ${hours} hours and ${minutes} minutes`;
+                                        return `${label}: ${hours}h ${minutes}m`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                stacked: true,
+                                grid: {
+                                    color: 'rgba(255, 255, 255, 0.1)'
+                                },
+                                ticks: {
+                                    color: '#94a3b8',
+                                    maxRotation: window.innerWidth < 768 ? 45 : 0,
+                                    minRotation: window.innerWidth < 768 ? 45 : 0,
+                                    font: {
+                                        size: window.innerWidth < 768 ? 9 : 11
+                                    }
+                                }
+                            },
+                            y: {
+                                stacked: true,
+                                grid: {
+                                    color: 'rgba(255, 255, 255, 0.1)'
+                                },
+                                ticks: {
+                                    color: '#94a3b8',
+                                    callback: function(value) {
+                                        const hours = Math.floor(value / 60);
+                                        const minutes = Math.floor(value % 60);
+                                        return `${hours}h ${minutes}m`;
+                                    },
+                                    font: {
+                                        size: window.innerWidth < 768 ? 9 : 11
+                                    }
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'Duration',
+                                    color: '#94a3b8',
+                                    font: {
+                                        size: window.innerWidth < 768 ? 10 : 12
                                     }
                                 }
                             }
                         }
                     }
                 });
+            }
+
+            function updateLastUpdateTime(feeds) {
+                if (feeds.length > 0) {
+                    const lastUpdate = new Date(feeds[feeds.length - 1].created_at);
+                    const lastUpdateFormatted = formatDateTime(lastUpdate);
+                    document.getElementById('lastUpdateTime').textContent = lastUpdateFormatted;
+                }
+            }
+
+            function updateStatusMessage(feeds) {
+                if (feeds.length > 0) {
+                    const lastTime = new Date(feeds[feeds.length - 1].created_at).getTime();
+                    const now = new Date().getTime();
+                    const currentDifference = now - lastTime;
+                    
+                    const statusMessage = document.getElementById('statusMessage');
+                    const statusText = document.getElementById('statusText');
+                    
+                    if (currentDifference < 3 * 60 * 1000) {
+                        statusText.textContent = "No blackout detected";
+                        statusMessage.style.display = 'block';
+                        statusMessage.style.background = 'rgba(0, 210, 255, 0.1)';
+                        statusMessage.style.borderColor = 'rgba(0, 210, 255, 0.2)';
+                    } else {
+                        statusText.textContent = "Blackout detected";
+                        statusMessage.style.display = 'block';
+                        statusMessage.style.background = 'rgba(255, 65, 108, 0.1)';
+                        statusMessage.style.borderColor = 'rgba(255, 65, 108, 0.2)';
+                    }
+                }
             }
         });
     </script>
