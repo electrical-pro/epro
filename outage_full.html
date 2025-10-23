@@ -136,8 +136,6 @@
             transition: var(--transition);
         }
 
-
-
         .styled-table tbody tr.power-row {
             background-color: rgba(0, 87, 107, 0.144);
         }
@@ -147,10 +145,18 @@
         }
 
 
+        .styled-table tbody tr.high-voltage-row {
+            background-color: rgba(2, 27, 56, 0.308);
+        }
+
+        .styled-table tbody tr.low-voltage-row {
+            
+            background-color: rgba(2, 27, 56, 0.308);
+        }
+
         .styled-table tbody tr:hover {
             background: rgb(78, 16, 45);
         }
-
 
         .status-badge {
             padding: 4px 8px;
@@ -169,6 +175,41 @@
             color: var(--danger);
         }
 
+        .status-high {
+            background: rgb(255, 88, 127);
+            color: #000000;
+        }
+
+        .status-low {
+
+            background: rgb(80, 214, 255);
+            color: #000000;
+
+        }
+
+        .status-normal {
+            background: rgba(0, 255, 255, 0.2);
+            color: var(--success);
+        }
+
+        .ongoing-blackout {
+            color: #ff416c !important;
+            font-weight: bold;
+            animation: pulse 2s infinite;
+        }
+
+        .ongoing-power {
+            color: #00d2ff !important;
+            font-weight: bold;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
         .chart-container {
             background: var(--card-bg);
             backdrop-filter: blur(10px);
@@ -179,6 +220,7 @@
             transition: var(--transition);
             margin-top: 20px;
             height: 400px;
+            margin-bottom: 20px; /* Added spacing between chart and voltage extremes */
         }
 
         .chart-container:hover {
@@ -243,17 +285,39 @@
         }
 
         .status-message {
-            background: rgba(0, 210, 255, 0.1);
             border-radius: 8px;
             padding: 12px;
             margin-top: 15px;
             text-align: center;
-            border: 1px solid rgba(0, 210, 255, 0.2);
+            transition: var(--transition);
         }
 
         .status-message i {
-            color: var(--success);
             margin-right: 8px;
+        }
+
+        .status-normal {
+            background: rgba(0, 210, 255, 0.1);
+            border: 1px solid rgba(0, 210, 255, 0.2);
+        }
+
+        .status-normal i {
+            color: var(--success);
+        }
+
+        .status-warning {
+            background: rgba(255, 65, 108, 0.1);
+            border: 1px solid rgba(255, 65, 108, 0.2);
+        }
+
+        .status-warning i {
+            color: var(--danger);
+            animation: blink 1.5s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
 
         /* Mobile-first responsive design */
@@ -295,6 +359,7 @@
                 height: 350px;
                 padding: 15px;
                 padding-bottom: 17%;
+                margin-bottom: 15px; /* Adjusted for mobile */
             }
         }
 
@@ -310,12 +375,14 @@
             .chart-container {
                 height: 450px;
                 padding-bottom: 7%;
+                margin-bottom: 20px; /* Adjusted for tablet */
             }
         }
 
         @media (min-width: 992px) {
             .chart-container {
                 height: 500px;
+                margin-bottom: 20px; /* Adjusted for desktop */
             }
         }
     </style>
@@ -357,6 +424,19 @@
             </div>
             <canvas id="outageChart"></canvas>
         </div>
+
+        <!-- New Voltage Extremes Card -->
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-bar"></i>
+                <h2>Voltage Extremes</h2>
+            </div>
+            <div id="voltageExtremes">
+                <div class="loader">
+                    <div class="spinner"></div>
+                </div>
+            </div>
+        </div>
         
         <footer>
             <p>Power Outage Analysis Dashboard &copy; 2025 | Serhii B.</p>
@@ -365,6 +445,8 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
+        const fiveMinutes = 5 * 64 * 1000; // 5 minutes in milliseconds
+
         document.addEventListener("DOMContentLoaded", function() {
             const timestamp = new Date().getTime();
             const url = `https://api.thingspeak.com/channels/1288695/fields/1.json?offset=0&results=5400&key=KMPJJFINTMO4GWQK&_=${timestamp}`;
@@ -378,6 +460,7 @@
                     createOutageChart(gaps);
                     updateLastUpdateTime(feeds);
                     updateStatusMessage(feeds);
+                    findVoltageExtremes(feeds); // New function call
                 })
                 .catch(error => {
                     console.error('Error fetching data:', error);
@@ -385,7 +468,7 @@
                 });
 
             function findDataGaps(feeds) {
-                const threeMinutes = 5 * 60 * 1000; // three minutes in milliseconds
+                
                 const gaps = [];
 
                 for (let i = 1; i < feeds.length; i++) {
@@ -393,7 +476,7 @@
                     const currentTime = new Date(feeds[i].created_at).getTime();
                     const difference = currentTime - previousTime;
 
-                    if (difference >= threeMinutes) {
+                    if (difference >= fiveMinutes) {
                         const gapDurationMinutes = difference / (60 * 1000);
                         gaps.push({
                             start: feeds[i - 1].created_at,
@@ -421,7 +504,7 @@
                 const now = new Date().getTime();
                 const currentDifference = now - lastTime;
 
-                if (currentDifference >= threeMinutes) {
+                if (currentDifference >= fiveMinutes) {
                     const ongoingDurationMinutes = currentDifference / (60 * 1000);
                     gaps.push({
                         start: feeds[feeds.length - 1].created_at,
@@ -431,12 +514,12 @@
                     });
                 } else {
                     if (gaps.length > 0 && gaps[gaps.length - 1].hasPower) {
-                        gaps[gaps.length - 1].end = new Date().toISOString();
+                        gaps[gaps.length - 1].end = 'ongoing';
                         gaps[gaps.length - 1].duration += currentDifference / (60 * 1000);
                     } else {
                         gaps.push({
                             start: feeds[feeds.length - 1].created_at,
-                            end: new Date().toISOString(),
+                            end: 'ongoing',
                             duration: currentDifference / (60 * 1000),
                             hasPower: true
                         });
@@ -470,12 +553,23 @@
 
                     const tbody = table.querySelector('tbody');
 
-                    // Show only the most recent 10 periods in the table for better performance
-                    const recentGaps = gaps.slice(-10);
+                    // Show only the most recent 50 periods in the table for better performance
+                    const recentGaps = gaps.slice(-50);
                     
                     recentGaps.forEach(gap => {
                         const localStart = formatDateTime(gap.start);
-                        let localEnd = gap.end === 'ongoing' ? 'Ongoing Blackout' : formatDateTime(gap.end);
+                        let localEnd;
+                        
+                        if (gap.end === 'ongoing') {
+                            if (gap.hasPower) {
+                                localEnd = `<span class="ongoing-power">Power Available</span>`;
+                            } else {
+                                localEnd = `<span class="ongoing-blackout">Ongoing Blackout</span>`;
+                            }
+                        } else {
+                            localEnd = formatDateTime(gap.end);
+                        }
+                        
                         const hours = Math.floor(gap.duration / 60);
                         const minutes = Math.floor(gap.duration % 60);
                         const row = document.createElement('tr');
@@ -492,15 +586,109 @@
                     resultsDiv.appendChild(table);
                     
                     // Add a note if there are more periods
-                    if (gaps.length > 10) {
+                    if (gaps.length > 50) {
                         const note = document.createElement('p');
                         note.style.marginTop = '15px';
                         note.style.textAlign = 'center';
                         note.style.color = '#94a3b8';
-                        note.innerHTML = `Showing 10 most recent periods out of ${gaps.length} total`;
+                        note.innerHTML = `Showing 50 most recent periods out of ${gaps.length} total`;
                         resultsDiv.appendChild(note);
                     }
                 }
+            }
+
+            // NEW FUNCTION: Find and display voltage extremes
+            function findVoltageExtremes(feeds) {
+                if (!feeds || feeds.length === 0) {
+                    document.getElementById('voltageExtremes').innerHTML = '<p>No voltage data available.</p>';
+                    return;
+                }
+
+                let minVoltage = { value: Infinity, time: null, entry_id: null };
+                let maxVoltage = { value: -Infinity, time: null, entry_id: null };
+                let lastVoltage = { value: null, time: null, entry_id: null };
+
+                // Filter out entries with null or undefined field1 values
+                const validFeeds = feeds.filter(feed => feed.field1 !== null && feed.field1 !== undefined);
+
+                if (validFeeds.length === 0) {
+                    document.getElementById('voltageExtremes').innerHTML = '<p>No valid voltage readings found.</p>';
+                    return;
+                }
+
+                // Find min and max voltage
+                validFeeds.forEach(feed => {
+                    const voltage = parseFloat(feed.field1);
+                    
+                    if (!isNaN(voltage)) {
+                        if (voltage < minVoltage.value) {
+                            minVoltage.value = voltage;
+                            minVoltage.time = feed.created_at;
+                            minVoltage.entry_id = feed.entry_id;
+                        }
+                        
+                        if (voltage > maxVoltage.value) {
+                            maxVoltage.value = voltage;
+                            maxVoltage.time = feed.created_at;
+                            maxVoltage.entry_id = feed.entry_id;
+                        }
+                    }
+                });
+
+                // Get the last voltage reading
+                const lastFeed = validFeeds[validFeeds.length - 1];
+                lastVoltage.value = parseFloat(lastFeed.field1);
+                lastVoltage.time = lastFeed.created_at;
+                lastVoltage.entry_id = lastFeed.entry_id;
+
+                // Display the results
+                displayVoltageExtremes(minVoltage, maxVoltage, lastVoltage);
+            }
+
+            // NEW FUNCTION: Display voltage extremes in a table
+            function displayVoltageExtremes(minVoltage, maxVoltage, lastVoltage) {
+                const voltageDiv = document.getElementById('voltageExtremes');
+                
+                if (minVoltage.value === Infinity || maxVoltage.value === -Infinity) {
+                    voltageDiv.innerHTML = '<p>No valid voltage readings found.</p>';
+                    return;
+                }
+
+                const table = document.createElement('table');
+                table.classList.add('styled-table');
+                table.innerHTML = `
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Voltage (V)</th>
+                            <th>Detected At</th>
+                            <th>Entry ID</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="high-voltage-row">
+                            <td><span class="status-badge status-high">Highest Voltage</span></td>
+                            <td>${maxVoltage.value.toFixed(1)}</td>
+                            <td>${formatDateTime(maxVoltage.time)}</td>
+                            <td>${maxVoltage.entry_id}</td>
+                        </tr>
+                        <tr class="low-voltage-row">
+                            <td><span class="status-badge status-low">Lowest Voltage</span></td>
+                            <td>${minVoltage.value.toFixed(1)}</td>
+                            <td>${formatDateTime(minVoltage.time)}</td>
+                            <td>${minVoltage.entry_id}</td>
+                        </tr>
+                        <tr class="power-row">
+                            <td><span class="status-badge status-normal">Last Reading</span></td>
+                            <td>${lastVoltage.value.toFixed(2)}</td>
+                            <td>${formatDateTime(lastVoltage.time)}</td>
+                            <td>${lastVoltage.entry_id}</td>
+                        </tr>
+                    </tbody>
+                `;
+
+                voltageDiv.innerHTML = '';
+                voltageDiv.appendChild(table);
             }
 
             function formatDateTime(dateTime) {
@@ -517,7 +705,7 @@
 
             function createOutageChart(gaps) {
                 // Limit the number of data points to prevent performance issues
-                const maxDataPoints = 15;
+                const maxDataPoints = 50;
                 const displayGaps = gaps.length > maxDataPoints ? gaps.slice(-maxDataPoints) : gaps;
                 
                 // Create simpler labels for the chart
@@ -566,7 +754,16 @@
                                     title: function(tooltipItems) {
                                         const gap = displayGaps[tooltipItems[0].dataIndex];
                                         const start = formatDateTime(gap.start);
-                                        const end = gap.end === 'ongoing' ? 'Ongoing' : formatDateTime(gap.end);
+                                        let end;
+                                        if (gap.end === 'ongoing') {
+                                            if (gap.hasPower) {
+                                                end = 'Power Available';
+                                            } else {
+                                                end = 'Ongoing Blackout';
+                                            }
+                                        } else {
+                                            end = formatDateTime(gap.end);
+                                        }
                                         return `${start} to ${end}`;
                                     },
                                     label: function(context) {
@@ -640,17 +837,20 @@
                     
                     const statusMessage = document.getElementById('statusMessage');
                     const statusText = document.getElementById('statusText');
+                    const icon = statusMessage.querySelector('i');
                     
-                    if (currentDifference < 3 * 60 * 1000) {
+                    if (currentDifference < fiveMinutes) {
+                        // No blackout - use check circle
+                        icon.className = "fas fa-check-circle";
                         statusText.textContent = "No blackout detected";
                         statusMessage.style.display = 'block';
-                        statusMessage.style.background = 'rgba(0, 210, 255, 0.1)';
-                        statusMessage.style.borderColor = 'rgba(0, 210, 255, 0.2)';
+                        statusMessage.className = "status-message status-normal";
                     } else {
+                        // Blackout detected - use exclamation triangle with blinking animation
+                        icon.className = "fas fa-exclamation-triangle";
                         statusText.textContent = "Blackout detected";
                         statusMessage.style.display = 'block';
-                        statusMessage.style.background = 'rgba(255, 65, 108, 0.1)';
-                        statusMessage.style.borderColor = 'rgba(255, 65, 108, 0.2)';
+                        statusMessage.className = "status-message status-warning";
                     }
                 }
             }
