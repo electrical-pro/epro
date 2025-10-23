@@ -40,7 +40,7 @@
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 900px;
             margin: 0 auto;
         }
 
@@ -807,6 +807,12 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: {
+                        duration: 0 // disables animation only on initial draw
+                    },
+                    hover: {
+                        animationDuration: 400 // keeps smooth hover transitions
+                    },
                     plugins: {
                         legend: {
                             position: 'top',
