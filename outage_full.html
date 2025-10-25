@@ -456,13 +456,77 @@
 
         document.addEventListener("DOMContentLoaded", function() {
             // Initial load with full dataset
-            loadInitialData();
+            loadQuickPreview();
             
             // Set up periodic updates
             setupLiveUpdates();
         });
 
-        function loadInitialData() {
+        async function loadInitialData() {
+    const timestamp = new Date().getTime();
+    const url = `https://api.thingspeak.com/channels/1288695/fields/1.json?offset=0&results=5400&key=KMPJJFINTMO4GWQK&_=${timestamp}`;
+    
+    try {
+        const response = await fetch(url);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let firstChunkProcessed = false;
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            
+            // Try to parse what we have so far
+            if (!firstChunkProcessed && buffer.length > 5000) { // Wait for reasonable amount of data
+                try {
+                    const partialData = JSON.parse(buffer);
+                    if (partialData.feeds && partialData.feeds.length > 0) {
+                        allFeeds = partialData.feeds;
+                        processData();
+                        firstChunkProcessed = true;
+                    }
+                } catch (e) {
+                    // Not enough data yet to parse, continue reading
+                }
+            }
+        }
+        
+        // Final parse with complete data
+        const finalData = JSON.parse(buffer);
+        allFeeds = finalData.feeds;
+        processData();
+        
+    } catch (error) {
+        console.error('Error fetching data:', error);
+        document.getElementById('results').innerHTML = '<p>Error loading data. Please try again later.</p>';
+    }
+}
+
+        function loadQuickPreview() {
+            const timestamp = new Date().getTime();
+            const url = `https://api.thingspeak.com/channels/1288695/fields/1.json?offset=0&results=420&key=KMPJJFINTMO4GWQK&_=${timestamp}`;
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    allFeeds = data.feeds;
+                    processData();
+                    
+                    // Immediately start loading full dataset in background
+                    loadFullDataset();
+                })
+                .catch(error => {
+                    console.error('Error fetching preview data:', error);
+                    document.getElementById('results').innerHTML = '<p>Error loading data. Please try again later.</p>';
+                });
+        }
+
+
+        function loadFullDataset() {
             const timestamp = new Date().getTime();
             const url = `https://api.thingspeak.com/channels/1288695/fields/1.json?offset=0&results=5400&key=KMPJJFINTMO4GWQK&_=${timestamp}`;
             
