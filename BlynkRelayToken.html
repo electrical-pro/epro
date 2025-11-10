@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html>
+<style>
+  body {
+    background-color: #000f17;
+    font-family: Arial;
+    Color: white;
+  }
+</style>
+
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8">
+  <meta name="theme-color" content='#14af74' />
+
+  <title>SmartHomeServer</title>
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.css">
+  <link rel="shortcut icon" href='/favicon.ico'>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jscolor/2.0.4/jscolor.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui-touch-punch/0.2.3/jquery.ui.touch-punch.min.js"></script>
+  
+  <script>
+    if (typeof jQuery == 'undefined') {
+        document.write(unescape("%3Clink rel='stylesheet' href='jquery-ui.css'%3E"));
+        document.write(unescape("%3Cscript src='jquery.min.js' type='text/javascript'%3E%3C/script%3E"));
+        document.write(unescape("%3Cscript src='jquery-ui.min.js' type='text/javascript'%3E%3C/script%3E"));
+        document.write(unescape("%3Cscript src='jscolor.js' type='text/javascript'%3E%3C/script%3E"));
+        document.write(unescape("%3Cscript src='touch-punch.min.js' type='text/javascript'%3E%3C/script%3E")); 
+    }
+
+    const qs = new URLSearchParams(window.location.search); // reads query string
+    const token = qs.get('token'); // get the 'token' parameter
+
+    if (token) {
+        prompt("Token found:", token); // show token immediately
+    } else {
+        prompt("No token in URL"); // for debugging
+    }
+
+  </script>
+
+
+  <script> $('#widget').draggable(); </script>
+
+
+  <style>
+    
+    #smartData,
+    #pickerVal,
+    #picker {
+      float: left;
+      clear: left;
+      width: 325px;
+      margin: 5px;
+      outline: none;
+      margin-bottom: 5px;
+
+    }
+
+    hr {
+      display: block;
+      height: 0px;
+      border: 0;
+      border-top: 1px solid #00a3a3;
+
+      padding: 0;
+    }
+
+    #StalyLines {
+      float: left;
+      clear: left;
+      width: 323.8px;
+      margin: 5px;
+      outline: none;
+    }
+
+    li
+    {    
+      margin-bottom: 3px;
+      margin-left: 15px;
+      
+    }
+
+
+    #slider,
+    #slider2 {
+
+      float: left;
+      clear: left;
+      width: 323.8px;
+      margin: 5px;
+      margin-top: 0.6em;
+      margin-bottom: 0.6em;
+      outline: none;
+
+      -moz-border-radius: 10px;
+      -webkit-border-radius: 10px;
+      border-radius: 10px;
+
+      background: #006666;
+      border: 0.1px solid #000000;
+    }
+
+    #custom-handle,
+    #custom-handle2 {
+
+      width: 2.65em;
+      height: 1.4em;
+      top: 50%;
+      margin-top: -.74em;
+      text-align: center;
+      line-height: 1.6em;
+
+      -moz-border-radius: 15px;
+      -webkit-border-radius: 15px;
+      border-radius: 15px;
+      outline: none;
+
+      color: #000000;
+      background: #08e18e;
+      border: 1px solid #08e18e;
+
+    }
+
+    #ResponseTime {
+
+      width: 323.8px;
+      margin: 5px;
+      margin-bottom: -9px;
+
+    }
+
+    #LoadingImage {
+      width: 30%;
+      height: 20%;
+      display: block;
+      margin: 0 auto;
+      outline: none;
+      min-height: 170px;
+
+    }
+
+    #loadingText,
+    #pickerVal {
+      text-align: center;
+      color: #e8fff6;
+    }
+
+    #picker,
+    #chosen-value, #moreBtn {
+      font-size: 82%;
+      -moz-border-radius: 10px;
+      -webkit-border-radius: 10px;
+      border-radius: 10px;
+      text-align: center;
+      outline: none;
+      width: 323.8px;
+      
+      
+      
+
+      color: #000000;
+      background: #08e18e;
+      border: 0px solid #00ae6b;
+    }
+
+    #chosen-value, #moreBtn {
+      width: 24%; 
+    }
+  </style>
+
+  <script>
+
+    var colorDataOld;
+    var colorData;
+    var startCheck = 0;
+    var SendColorInerval = 100; // max RGB send frequency
+    var SendColorInervalDefault = 200; // max RGB send frequency (on use)
+    var SendColorInervalONcpuSave = 200; // max RGB send frequency (when not used)
+    var UpdateSmartDataInerval = 1000; // max Update the data frequnecy
+
+    var pingTest = 0;
+    var pingTestAwr = 0;
+    var awrageCounter = 0;
+    var startTime = 0;
+    var SliderValue = 0;
+    var SliderValueOld = 0;
+    var SliderValueFromArduino = 0;
+    var sliderRedyToGetCheck = 0;
+
+    var SliderValue2 = 0;
+    var SliderValueOld2 = 0;
+    var SliderValueFromArduino2 = 0;
+    var sliderRedyToGetCheck2 = 0;
+
+    var RGBvalueFromArduino = "FFFFFF"; //always has a fresh value from arduino, you can use it.
+    var FirsSend = 1;
+    var dontSend = 0;
+    var dontSend2 = 0; // second slider
+
+    var dontSendRGB = 0;
+    var canSendOnSocket = 1;
+    var sliderAllow = 0;
+
+    var sliderAllow2 = 0;
+
+    var RGB_Allow = 0;
+
+    //var colorAllow=0;
+
+
+    // call from console
+    function speed(spdfunin){
+      UpdateSmartDataInerval=spdfunin; 
+    }
+
+    // call from console
+    function cpusave(){
+      SendColorInervalDefault = 16; // max RGB send frequency (on use)
+      SendColorInervalONcpuSave = 445; // max RGB send frequency (when not used)
+      UpdateSmartDataInerval = 999; // max Update the data frequnecy
+    }
+
+
+    // call from console
+    function info() {
+      console.log("sliderRedyToGetCheck = " + sliderRedyToGetCheck);
+      console.log("SendColorInerval = " + SendColorInerval);
+      console.log("UpdateSmartDataInerval = " + UpdateSmartDataInerval);
+      console.log("======================================");
+      setTimeout(info, 1000);
+    }
+
+    $(document).ready(function () {  // run code when page is fully loaded
+
+
+     // Imput insert characters
+     var input = document.getElementById('chosen-value');
+     input.addEventListener('keypress', function(event){
+        var s = this.selectionStart;
+        this.value = this.value.substr(0, s) + this.value.substr(s + 1);
+        this.selectionEnd = s;
+
+        // max length
+        if (input.value.length > 5) {
+        this.value = this.value.substr(0,5)
+        }
+    }, false);
+
+      // initialization
+      $("#slider").slider({
+        value: 0
+      });
+      $("#slider2").slider({
+        value: 0
+      });
+
+
+      $("#chosen-value").val("000000"); //starting value 
+      $("#slider").find(".ui-slider-handle").text("OFF"); //starting lable
+      $("#slider2").find(".ui-slider-handle").text("OFF"); //starting lable
+
+      $(function () {
+        $("#slider").slider({
+          min: -3,
+          max: 112.5,
+          value: 0,
+          slide: function (event, ui) {
+              $(".selector").css('background', 'linear-gradient(90deg, #09ae6e ' + (ui.value*0.9+4) + '%, #006666 0%)'); // fill slider 
+            SliderValue = $("#slider").slider("option", "value");
+            if (SliderValue == 0) {
+              $("#slider").find(".ui-slider-handle").text("OFF");
+            }
+            else {
+              $("#slider").find(".ui-slider-handle").text(SliderValue);
+            } 
+            if (ui.value < 0){ // fixing bugs
+              $(".selector").slider("option", "value", 0); // apply
+              return false;
+            }
+            if (ui.value > 100){
+              $(".selector").slider("option", "value", 100); // apply
+              return false;
+            }  
+          }
+        });
+      });
+
+
+      //==========slider2
+      $(function () {
+        $("#slider2").slider({
+          min: -3,
+          max: 112.5,
+          value: 0,
+          slide: function (event, ui) {
+              $(".selector2").css('background', 'linear-gradient(90deg, #09ae6e ' + (ui.value*0.9+4) + '%, #006666 0%)'); // fill slider
+            SliderValue2 = $("#slider2").slider("option", "value");
+            if (SliderValue2 == 0) {
+              $("#slider2").find(".ui-slider-handle").text("OFF");
+            }
+            else {
+              $("#slider2").find(".ui-slider-handle").text(SliderValue2);
+            }
+            if (ui.value < 0){ // fixing bugs
+              $(".selector2").slider("option", "value", 0); // apply
+              return false;
+            }
+            if (ui.value > 100){
+              $(".selector2").slider("option", "value", 100); // apply
+              return false;
+            }  
+          }
+        });
+      });
+
+      //=====================
+      
+              //$("#ResponseTime").html("========== BLYNK MODE ==========").css("fontSize", 16);
+
+
+              //=====WebPage====Requster============//
+              setTimeout(SmartUpdt, UpdateSmartDataInerval); // Set interval
+              function SmartUpdt() { // run function
+            
+                  ///============ here add =============================================//
+
+
+                  startTime = new Date().getTime(); //gets time of start
+
+                  $.get("https://blynk.cloud/external/api/update?token="+ token +"&v70=0"); // update requst
+
+                  $.ajax({
+                    type: "GET",
+                    url: "https://blynk.cloud/external/api/get?token="+ token +"&v71",
+                    dataType: "html",
+                    success: function (response) {
+                      //alert("Details saved successfully!!!");
+                      //alert(response);
+                      //alert(htmlData);
+                      $.ajax({
+                        type: "GET",
+                        url: "https://blynk.cloud/external/api/get?token="+ token +"&v72",
+                        dataType: "html",
+                        success: function (response2) {
+                          //alert("Details saved successfully!!!");
+                          //alert(response);
+                          //alert(htmlData);
+                          $("#smartData").html(response+response2).css("text-align", "center");
+                          $("body").first().css("background-color","#000000"); // background black
+                          $("#smartData").css("fontSize", 13);
+                          $("#smartData").css("text-align", "left");
+
+                          canSendOnSocket = 1;
+
+                          sliderRedyToGetCheck = sliderRedyToGetCheck - 1;
+
+                          // ping
+                          pingTest = new Date().getTime() - startTime; //gets time of start
+
+                          $("body").first().css("background-color", "#000000"); // background black
+                          $("#smartData").css("fontSize", 13);
+                          $("#smartData").css("text-align", "left");
+                          $("#ResponseTime").html("<li><font color=#08e18e> [BLYNK MODE] </font> | Response time: " + pingTest + " ms</li>").css("fontSize", 13);
+                          $("#ResponseTime").css('color', '#e8fff6');
+                          canSendOnSocket = 1;
+                            function AwrageVal (inVal){   // average ping function
+                              awrageCounter++;
+                              pingTestAwr = pingTestAwr + inVal;
+                              var outVal =pingTestAwr/awrageCounter;
+
+                                  if(awrageCounter>=10){  // reset but not completely
+                                  awrageCounter=5;
+                                  pingTestAwr=pingTestAwr/2;
+                                  }
+
+                              return outVal.toFixed(1);
+                            }
+                      
+                      },
+                      error: function (xhr, ajaxOptions, thrownError) {
+                          alert(xhr.status);
+                          alert(thrownError);
+                      }
+                  });
+                    },
+                    error: function (xhr, ajaxOptions, thrownError) {
+                      alert(xhr.status);
+                      alert(thrownError);
+                    }
+                  });
+
+
+
+
+
+              setTimeout(SmartUpdt, UpdateSmartDataInerval);
+              } //=======interval
+
+
+              //============slider/color===sender============//
+              setTimeout(SmartColorUpdt, SendColorInerval); // Set interval
+
+              function SmartColorUpdt() {
+
+
+              colorData = $("#chosen-value").val();  // update colorData
+
+                //==slider1 sender=======
+                SliderValue = $(".selector").slider("value"); // from slider to var // main light
+                if (SliderValue != SliderValueOld) {  // check if color heve change
+                  SliderValueOld = SliderValue;
+
+                  sliderRedyToGetCheck = 6; // this is used to kill feedback loop
+
+
+                  if (startCheck != 0 && dontSend != 1) {
+                    sliderAllow = 1;
+                  }
+                  else {
+                    dontSend = 0;
+                  }
+                }
+
+                if (sliderAllow == 1 && canSendOnSocket == 1) {
+                  $.get("https://blynk.cloud/external/api/update?token="+ token +"&v1=" + SliderValue); // Post RGB value  to server
+                  //canSendOnSocket = 0;
+                  sliderAllow = 0;
+                  sliderRedyToGetCheck = 6; // this is used to kill feedback loop
+                }
+
+                if (sliderRedyToGetCheck < 5 && SliderValueFromArduino != SliderValue) { // "SliderValueFromArduino != SliderValue" is additional check, dont know if needed
+                  dontSend = 1; // Stops resend the same value, kills loop
+                  $(".selector").slider("option", "value", SliderValueFromArduino); // apply
+                  SliderValue = SliderValueFromArduino;
+                  $(".selector").css('background', 'linear-gradient(90deg, #09ae6e ' + SliderValue + '%, #006666 0%)'); // fill slider 
+                }
+
+                if (sliderRedyToGetCheck < 2) {   // dont know if needed, it stops sliderRedyToGetCheck go below 0                                        
+                  sliderRedyToGetCheck = 2;
+                }
+
+                if (SliderValue == 0) {
+                  $("#slider").find(".ui-slider-handle").text("OFF");
+                }
+                else {
+                  $("#slider").find(".ui-slider-handle").text(SliderValue);
+                }
+
+
+
+
+                //======slider2=====================
+                SliderValue2 = $(".selector2").slider("value"); // from slider to var // main light
+                if (SliderValue2 != SliderValueOld2) {  // check if color heve change
+                  SliderValueOld2 = SliderValue2;
+
+
+                  sliderRedyToGetCheck = 6; // this is used to kill feedback loop
+
+                  //=====
+                  if (startCheck != 0 && dontSend2 != 1) {
+                    sliderAllow2 = 1;
+                  }
+                  else {
+                    dontSend2 = 0;
+                  }
+                }
+
+                if (sliderAllow2 == 1 && canSendOnSocket == 1) {
+                  $.get("https://blynk.cloud/external/api/update?token="+ token +"&v2=" + SliderValue2); // Post RGB value  to server
+                  //canSendOnSocket = 0;
+                  sliderAllow2 = 0;
+                  sliderRedyToGetCheck = 6; // this is used to kill feedback loop
+                }
+
+                if (sliderRedyToGetCheck < 5 && SliderValueFromArduino2 != SliderValue2) { // "SliderValueFromArduino != SliderValue" is additional check, dont know if needed
+                  dontSend2 = 1; // Stops resend the same value, kills loop
+                  $(".selector2").slider("option", "value", SliderValueFromArduino2); // apply
+                  SliderValue2 = SliderValueFromArduino2;
+                  $(".selector2").css('background', 'linear-gradient(90deg, #09ae6e ' + SliderValue2 + '%, #006666 0%)'); // fill slider
+                }
+
+                if (sliderRedyToGetCheck < 2) {   // dont know if needed, it stops sliderRedyToGetCheck go below 0                                        
+                  sliderRedyToGetCheck = 2;
+                }
+
+
+                if (SliderValue2 == 0) {
+                  $("#slider2").find(".ui-slider-handle").text("OFF");
+                }
+                else {
+                  $("#slider2").find(".ui-slider-handle").text(SliderValue2);
+                }
+                //======slider2_End=================
+
+
+
+
+                if (colorData != colorDataOld) {  // check if color heve changed
+                  colorDataOld = colorData;
+
+                  //===color===send=========                                            
+                  if (startCheck != 0 && dontSendRGB != 1) {
+                    RGB_Allow = 1;
+                    //beep();
+
+                    FirsSend = 0;
+                  }
+                  else {
+                    startCheck = 1;
+                    dontSendRGB = 0;
+                  }
+                  sliderRedyToGetCheck = 6;
+                }
+
+
+                if (FirsSend != 1 && canSendOnSocket == 1 && RGB_Allow == 1) {  // this check helps prevent auto disabeling of "rainbowColors" after page reload
+                  //colorData
+
+                  var aRgbHex = colorData.match(/.{1,2}/g);
+                  var aRgb = [
+                      parseInt(aRgbHex[0], 16),
+                      parseInt(aRgbHex[1], 16),
+                      parseInt(aRgbHex[2], 16)
+                  ];
+
+                  //console.log(aRgb); //[21, 2, 190]
+
+                  rSend = aRgb[0];
+                  gSend = aRgb[1];
+                  bSend = aRgb[2];
+                  
+
+                  $.get("https://blynk.cloud/external/api/update?token="+ token +"&v3=" + rSend + "&v3=" + gSend + " &v3=" + bSend); // Post RGB value  to server
+                  //canSendOnSocket = 0;
+                  RGB_Allow = 0;
+                  sliderRedyToGetCheck = 6; // this is used to kill feedback loop
+                  //beep(); // for development
+                }
+
+
+                if (sliderRedyToGetCheck < 5 && RGBvalueFromArduino != colorData) {
+                  document.getElementById('picker').jscolor.fromString(RGBvalueFromArduino);   // setting value from arduino
+                  dontSendRGB = 1;
+                }
+
+
+                //==== Work correct with "000000" / start
+                if (RGBvalueFromArduino == "000000" && sliderRedyToGetCheck < 5) {
+                  
+
+                    if(document.getElementById('picker').jscolor!="006666"){ // if current color does not match desighn
+                        document.getElementById('picker').jscolor.fromString("#006666");  // if "000000" from arduino make picker #color to match desighn
+                        $("#chosen-value").val("000000");
+                    }
+                  
+                  colorData = "000000";
+                  colorDataOld = "000000";
+                  
+                }
+                //==== Work correct with "000000" / end                                                     
+                
+
+                  // lower CPU load (updt speed when not used), you can remove if needed
+                   if(sliderRedyToGetCheck>2){
+                    SendColorInerval = SendColorInervalDefault;
+                   }else{
+                    SendColorInerval = SendColorInervalONcpuSave;
+                   }//=================
+
+
+                setTimeout(SmartColorUpdt, SendColorInerval);
+              } // INTERVAL
+              //=========================================//
+
+     
+              // $("#ResponseTime").html("<li>Socket Status: " + socket.readyState + " (Closed) </li>").css("fontSize", 13);
+              // $("body").first().css("background-color", "#000f17");  // error background
+              // $("#smartData").html("<hr>");
+            
+
+
+
+
+
+
+
+
+
+
+
+    });
+
+
+    // function beep() {
+    //   var snd = new Audio("data:audio/wav;base64,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qJrx4KOQjahZxWbcZgztj2c49nKmkId44S71j0c8eV9yDK6uPRzx5X18eDvjvQ6yKo9ZSS6l//8elePK/Lf//IInrOF/FvDoADYAGBMGb7FtErm5MXMlmPAJQVgWta7Zx2go+8xJ0UiCb8LHHdftWyLJE0QIAIsI+UbXu67dZMjmgDGCGl1H+vpF4NSDckSIkk7Vd+sxEhBQMRU8j/12UIRhzSaUdQ+rQU5kGeFxm+hb1oh6pWWmv3uvmReDl0UnvtapVaIzo1jZbf/pD6ElLqSX+rUmOQNpJFa/r+sa4e/pBlAABoAAAAA3CUgShLdGIxsY7AUABPRrgCABdDuQ5GC7DqPQCgbbJUAoRSUj+NIEig0YfyWUho1VBBBA//uQZB4ABZx5zfMakeAAAAmwAAAAF5F3P0w9GtAAACfAAAAAwLhMDmAYWMgVEG1U0FIGCBgXBXAtfMH10000EEEEEECUBYln03TTTdNBDZopopYvrTTdNa325mImNg3TTPV9q3pmY0xoO6bv3r00y+IDGid/9aaaZTGMuj9mpu9Mpio1dXrr5HERTZSmqU36A3CumzN/9Robv/Xx4v9ijkSRSNLQhAWumap82WRSBUqXStV/YcS+XVLnSS+WLDroqArFkMEsAS+eWmrUzrO0oEmE40RlMZ5+ODIkAyKAGUwZ3mVKmcamcJnMW26MRPgUw6j+LkhyHGVGYjSUUKNpuJUQoOIAyDvEyG8S5yfK6dhZc0Tx1KI/gviKL6qvvFs1+bWtaz58uUNnryq6kt5RzOCkPWlVqVX2a/EEBUdU1KrXLf40GoiiFXK///qpoiDXrOgqDR38JB0bw7SoL+ZB9o1RCkQjQ2CBYZKd/+VJxZRRZlqSkKiws0WFxUyCwsKiMy7hUVFhIaCrNQsKkTIsLivwKKigsj8XYlwt/WKi2N4d//uQRCSAAjURNIHpMZBGYiaQPSYyAAABLAAAAAAAACWAAAAApUF/Mg+0aohSIRobBAsMlO//Kk4soosy1JSFRYWaLC4qZBYWFRGZdwqKiwkNBVmoWFSJkWFxX4FFRQWR+LsS4W/rFRb/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////VEFHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAU291bmRib3kuZGUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMjAwNGh0dHA6Ly93d3cuc291bmRib3kuZGUAAAAAAAAAACU=");
+    //   snd.play();
+    // }
+
+ 
+
+  </script>
+
+</head>
+
+<body>
+
+  <div id="pickerVal">RGB HEX Color val:
+    <input id="chosen-value"> | <button id="moreBtn" onclick="location.href='https://electrical-pro.github.io/epro/berezan.html'">MORE</button> </div>
+  <button id="picker" class="jscolor {width:265, height:125, value:'006666',
+    borderColor:'#555', backgroundColor:'#002222', 
+	valueElement:'chosen-value'}"> Pick a color </button>
+
+  <div id="slider" class="selector">
+    <div id="custom-handle" class="ui-slider-handle">
+    </div>
+  </div>
+  <div id="slider2" class="selector2">
+    <div id="custom-handle2" class="ui-slider-handle">
+    </div>
+  </div>
+
+  <hr id="StalyLines">
+  <div id="ResponseTime">
+    <div align="center"> Connecting... </div>
+  </div>
+ 
+  <div id="smartData">
+    
+    <hr>
+    <svg id="LoadingImage" class="loading-image" version="1.1" id="L7" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+      x="0px" y="0px" viewBox="0 0 100 100" enable-background="new 0 0 100 100" xml:space="preserve">
+      <path fill="#fff" d="M31.6,3.5C5.9,13.6-6.6,42.7,3.5,68.4c10.1,25.7,39.2,38.3,64.9,28.1l-3.1-7.9c-21.3,8.4-45.4-2-53.8-23.3
+  c-8.4-21.3,2-45.4,23.3-53.8L31.6,3.5z">
+        <animateTransform attributeName="transform" attributeType="XML" type="rotate" dur="2s" from="0 50 50" to="360 50 50" repeatCount="indefinite"
+        />
+      </path>
+      <path fill="#fff" d="M42.3,39.6c5.7-4.3,13.9-3.1,18.1,2.7c4.3,5.7,3.1,13.9-2.7,18.1l4.1,5.5c8.8-6.5,10.6-19,4.1-27.7
+  c-6.5-8.8-19-10.6-27.7-4.1L42.3,39.6z">
+        <animateTransform attributeName="transform" attributeType="XML" type="rotate" dur="1s" from="0 50 50" to="-360 50 50" repeatCount="indefinite"
+        />
+      </path>
+      <path fill="#fff" d="M82,35.7C74.1,18,53.4,10.1,35.7,18S10.1,46.6,18,64.3l7.6-3.4c-6-13.5,0-29.3,13.5-35.3s29.3,0,35.3,13.5
+  L82,35.7z">
+        <animateTransform attributeName="transform" attributeType="XML" type="rotate" dur="2s" from="0 50 50" to="360 50 50" repeatCount="indefinite"
+        />
+      </path>
+    </svg>
+
+    <h4 id="loadingText"> SmartHomeControl | Getting the data</h4>
+        <hr>
+      </div>
+</body>
+
+</html>
