@@ -400,7 +400,7 @@
             <div class="card">
                 <div class="card-header">
                     <i class="fas fa-table"></i>
-                    <h2>Power / Blackout Periods</h2>
+                    <h2>Power / Blackout Periods (15 min or more)</h2>
                 </div>
                 
                 <div id="results">
@@ -451,7 +451,7 @@
         let allFeeds = [];
         let outageChart = null;
         let updateInterval;
-        const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
+        const fiveMinutes = 14 * 60 * 1000; // 5 minutes in milliseconds
         const UPDATE_INTERVAL = 60000; // 60 seconds
 
         document.addEventListener("DOMContentLoaded", function() {
