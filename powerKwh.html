@@ -109,7 +109,7 @@ colors: ['#ff0000', '#00695c', '#c62828', '#f7a35c', '#8085e9',
      },
      polar: true,
      type: 'area',
-	
+
 	 
 	 
 	 
@@ -212,8 +212,8 @@ var channelsLoaded = 0;
 // the 'T' Temperature left axis, or the 'O' Other right axis.
 var channelKeys =[];
 
-channelKeys.push({channelNumber:1577263, name:'Frequency',key:'5YWET4QMH9QYHWUE',
-   fieldList:[{field:1,axis:'T'}]});
+channelKeys.push({channelNumber:1288695, name:'Power',key:'KMPJJFINTMO4GWQK',
+   fieldList:[{field:4,axis:'T'}]});
     
 // user's timezone offset
 var myOffset = new Date().getTimezoneOffset();
@@ -453,8 +453,8 @@ rangeSelector: {
 			}
 		},
     tooltip: {
-      valueDecimals: 4,
-      valueSuffix: 'Hz',
+      valueDecimals: 1,
+      valueSuffix: 'W',
 
 			// reformat the tooltips so that local times are displayed
 			//formatter: function() {
@@ -476,31 +476,18 @@ rangeSelector: {
 		},
 		yAxis: [{
             title: {
-                text: 'Frequency (Hz)'
+                text: 'Watts (W)'
             },
-            id: 'T',
-            plotLines: [
-    {
-            color: '#358EF6',
-            width: 2,
-            value: 49.95,
-    },
-    {
-            color: '#F70366',
-            width: 2,
-            value: 50.05,
-    }],
+            id: 'T'
     }, {
     }],
-		plotOptions: {          ////////////////////////////////////////////////HERE What I DID
+					    plotOptions: {          ////////////////////////////////////////////////HERE What I DID
         series: {
-			      fillOpacity: 0.3,
-            threshold: 50,
-            negativeColor: '#F70366',
-            color: '#2B88F5',
+            threshold: null,
+            fillOpacity: 0.3,
             gapSize: 5
         }
-    },                                  ////////////////////////////////////////////////////////////////
+    },                                      ////////////////////////////////////////////////////////////////
 		exporting: {
 		  enabled: true,
       csv: {
@@ -632,7 +619,7 @@ function loadChannelHistory(sentChannelIndex,channelNumber,key,sentFieldList,sen
 }
 
   </script>
-    <title>SmartHome | Frequency</title>
+    <title>SmartHome | Power</title>
   </head>
   <body style="                      background-color: #000000; color: white;">
     <div id="chart-container"><br>

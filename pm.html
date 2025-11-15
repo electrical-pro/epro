@@ -184,7 +184,10 @@
         tooltip: {
           split: true,
         },
-        xAxis: { type: 'datetime' },
+        xAxis: {
+          type: 'datetime',
+          ordinal: false
+        },
         yAxis: axesOrder.map(function(axis, index) {
           return {
             id: axis.id,

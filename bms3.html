@@ -180,6 +180,7 @@
         plotOptions: {
           series: {
             fillOpacity: 0.3,
+            gapSize: 5,
             marker: { enabled: false }
           }
         },
@@ -276,7 +277,7 @@
         });
 
       function updateChart() {
-        $.getJSON('https://api.thingspeak.com/channels/2598250/feed/last.json?api_key=NZTXVJP3YLDX1HF3')
+        $.getJSON(`https://api.thingspeak.com/channels/${channelNumber}/feed/last.json?api_key=${key}`)
           .done(function (data) {
             var series = dynamicChart.series;
             var newPoint = [];
