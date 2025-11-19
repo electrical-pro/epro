@@ -191,15 +191,15 @@
     var startTime = 0;
     var SliderValue = 0;
     var SliderValueOld = 0;
-    var SliderValueFromArduino = 0;
+    var sva = 0;
     var sliderRedyToGetCheck = 0;
 
     var SliderValue2 = 0;
     var SliderValueOld2 = 0;
-    var SliderValueFromArduino2 = 0;
+    var sva2 = 0;
     var sliderRedyToGetCheck2 = 0;
 
-    var RGBvalueFromArduino = "FFFFFF"; //always has a fresh value from arduino, you can use it.
+    var cva = "FFFFFF"; //always has a fresh value from arduino, you can use it.
     var FirsSend = 1;
     var dontSend = 0;
     var dontSend2 = 0; // second slider
@@ -435,10 +435,10 @@
                   sliderRedyToGetCheck = 6; // this is used to kill feedback loop
                 }
 
-                if (sliderRedyToGetCheck < 5 && SliderValueFromArduino != SliderValue) { // "SliderValueFromArduino != SliderValue" is additional check, dont know if needed
+                if (sliderRedyToGetCheck < 5 && sva != SliderValue) { // "sva != SliderValue" is additional check, dont know if needed
                   dontSend = 1; // Stops resend the same value, kills loop
-                  $(".selector").slider("option", "value", SliderValueFromArduino); // apply
-                  SliderValue = SliderValueFromArduino;
+                  $(".selector").slider("option", "value", sva); // apply
+                  SliderValue = sva;
                   $(".selector").css('background', 'linear-gradient(90deg, #09ae6e ' + SliderValue + '%, #006666 0%)'); // fill slider 
                 }
 
@@ -480,10 +480,10 @@
                   sliderRedyToGetCheck = 6; // this is used to kill feedback loop
                 }
 
-                if (sliderRedyToGetCheck < 5 && SliderValueFromArduino2 != SliderValue2) { // "SliderValueFromArduino != SliderValue" is additional check, dont know if needed
+                if (sliderRedyToGetCheck < 5 && sva2 != SliderValue2) { // "sva != SliderValue" is additional check, dont know if needed
                   dontSend2 = 1; // Stops resend the same value, kills loop
-                  $(".selector2").slider("option", "value", SliderValueFromArduino2); // apply
-                  SliderValue2 = SliderValueFromArduino2;
+                  $(".selector2").slider("option", "value", sva2); // apply
+                  SliderValue2 = sva2;
                   $(".selector2").css('background', 'linear-gradient(90deg, #09ae6e ' + SliderValue2 + '%, #006666 0%)'); // fill slider
                 }
 
@@ -546,14 +546,14 @@
                 }
 
 
-                if (sliderRedyToGetCheck < 5 && RGBvalueFromArduino != colorData) {
-                  document.getElementById('picker').jscolor.fromString(RGBvalueFromArduino);   // setting value from arduino
+                if (sliderRedyToGetCheck < 5 && cva != colorData) {
+                  document.getElementById('picker').jscolor.fromString(cva);   // setting value from arduino
                   dontSendRGB = 1;
                 }
 
 
                 //==== Work correct with "000000" / start
-                if (RGBvalueFromArduino == "000000" && sliderRedyToGetCheck < 5) {
+                if (cva == "000000" && sliderRedyToGetCheck < 5) {
                   
 
                     if(document.getElementById('picker').jscolor!="006666"){ // if current color does not match desighn
