@@ -25,13 +25,7 @@
       overflow: hidden;
     }
 
-    .header {
-      padding: 15px 20px;
-      background-color: #1a1a1a;
-      border-bottom: 1px solid #333;
-      flex-shrink: 0;
-    }
-
+    
     h1 {
       font-size: 22px;
       color: #ffffff;
@@ -51,7 +45,7 @@
 
     .sidebar {
       width: 300px;
-      background-color: #1a1a1a;
+      background-color: #000000;
       padding: 20px;
       border-right: 1px solid #333;
       overflow-y: auto;
@@ -67,7 +61,7 @@
 
     #chart-container {
       flex: 1;
-      background-color: #1e1e1e;
+      background-color: #000000;
       padding: 15px;
     }
 
@@ -219,16 +213,6 @@
       color: #888;
     }
 
-    .footer {
-      padding: 12px 20px;
-      background-color: #1a1a1a;
-      border-top: 1px solid #333;
-      font-size: 12px;
-      color: #666;
-      text-align: center;
-      flex-shrink: 0;
-    }
-
     /* Responsive adjustments */
     @media (max-width: 768px) {
       .main-content {
@@ -244,10 +228,6 @@
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>Battery Cycles — Dynamic Trend</h1>
-    <div class="subtitle">Real-time visualization of battery cycle data</div>
-  </div>
 
   <div class="main-content">
     <div class="sidebar">
@@ -304,9 +284,6 @@
     </div>
   </div>
 
-  <div class="footer">
-    Battery Cycle Monitoring Dashboard • Highcharts Visualization
-  </div>
 
   <script>
     // Configuration
@@ -543,7 +520,7 @@
         await new Promise(r => setTimeout(r, DELAY_MS));
       }
       
-      // Fetch the very latest value to reflect current reality
+            // Fetch the very latest value to reflect current reality
       setStatus("Fetching latest value...", true);
       try {
         const lastValueUrl = `https://api.thingspeak.com/channels/${CHANNEL_ID}/fields/${FIELD}/last.json`;
