@@ -543,7 +543,41 @@
         await new Promise(r => setTimeout(r, DELAY_MS));
       }
       
-      setStatus(`Complete! Loaded ${dataset.filter(d => d[1] !== null).length} data points with ${stepDays}-day intervals.`);
+      // Fetch the very latest value to reflect current reality
+      setStatus("Fetching latest value...", true);
+      try {
+        const lastValueUrl = `https://api.thingspeak.com/channels/${CHANNEL_ID}/fields/${FIELD}/last.json`;
+        const lastResponse = await fetch(lastValueUrl);
+        if (lastResponse.ok) {
+          const lastData = await lastResponse.json();
+          if (lastData && lastData.field5) {
+            const lastValue = parseFloat(lastData.field5);
+            const lastDate = new Date(lastData.created_at);
+            
+            // Check if we already have this date in our dataset
+            const existingIndex = dataset.findIndex(d => {
+              const dDate = new Date(d[0]);
+              return dDate.toDateString() === lastDate.toDateString();
+            });
+            
+            if (existingIndex >= 0) {
+              // Update existing value if we have this date
+              dataset[existingIndex][1] = isFinite(lastValue) ? lastValue : null;
+            } else {
+              // Add as new point if we don't have this date
+              dataset.push([lastDate.getTime(), isFinite(lastValue) ? lastValue : null]);
+            }
+            
+            // Update chart with latest value
+            chart.series[0].setData(dataset, true, false, false);
+            updateStats();
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching latest value:", err);
+      }
+      
+      setStatus(`Complete! Loaded ${dataset.filter(d => d[1] !== null).length} data points with ${stepDays}-day intervals (including latest value).`);
       startBtn.disabled = false;
       pauseBtn.disabled = true;
     }
