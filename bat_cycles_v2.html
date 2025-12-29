@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Battery Cycles - Dynamic Highcharts Visualization</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://code.highcharts.com/highcharts.js"></script>
+  <script src="https://code.highcharts.com/modules/exporting.js"></script>
+  <script src="https://code.highcharts.com/modules/export-data.js"></script>
+  <script src="https://code.highcharts.com/modules/accessibility.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: #121212;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    
+    h1 {
+      font-size: 22px;
+      color: #ffffff;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: #aaa;
+    }
+
+    .main-content {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      width: 300px;
+      background-color: #000000;
+      padding: 20px;
+      border-right: 1px solid #333;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+
+    .chart-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #chart-container {
+      flex: 1;
+      background-color: #000000;
+      padding: 15px;
+    }
+
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .control-label {
+      font-size: 14px;
+      color: #aaa;
+    }
+
+    .buttons-group {
+      display: flex;
+      gap: 10px;
+    }
+
+    button {
+      background-color: #2a2a2a;
+      color: #e0e0e0;
+      border: 1px solid #444;
+      border-radius: 4px;
+      padding: 10px 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 14px;
+      flex: 1;
+    }
+
+    button:hover {
+      background-color: #3a3a3a;
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .primary-btn {
+      background-color: #4caf50;
+      border-color: #4caf50;
+      font-weight: bold;
+    }
+
+    .primary-btn:hover {
+      background-color: #5cbf60;
+    }
+
+    select, input {
+      background-color: #2a2a2a;
+      color: #e0e0e0;
+      border: 1px solid #444;
+      border-radius: 4px;
+      padding: 10px;
+      font-size: 14px;
+      width: 100%;
+    }
+
+    select:focus, input:focus {
+      outline: none;
+      border-color: #4caf50;
+    }
+
+    .progress-container {
+      margin: 20px 0;
+    }
+
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .progress-bar {
+      height: 10px;
+      background-color: #333;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+
+    .progress {
+      height: 100%;
+      background: linear-gradient(90deg, #4caf50, #8bc34a);
+      width: 0%;
+      transition: width 0.3s;
+    }
+
+    #status {
+      font-size: 14px;
+      color: #aaaaaa;
+      padding: 12px;
+      background-color: #1a1a1a;
+      border-radius: 6px;
+      margin-top: 20px;
+    }
+
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,.3);
+      border-radius: 50%;
+      border-top-color: #4caf50;
+      animation: spin 1s ease-in-out infinite;
+      margin-right: 10px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 15px;
+      margin: 20px 0;
+    }
+
+    .stat-box {
+      background-color: #252525;
+      padding: 15px;
+      border-radius: 8px;
+      text-align: center;
+      border-left: 4px solid #4caf50;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #4caf50;
+      margin-bottom: 5px;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #888;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+      .main-content {
+        flex-direction: column;
+      }
+      
+      .sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid #333;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="main-content">
+    <div class="sidebar">
+      <div class="controls">
+        <div class="control-group">
+          <div class="control-label">Start Date</div>
+          <input type="date" id="startDatePicker" value="2024-07-31">
+        </div>
+        
+        <div class="control-group">
+          <div class="control-label">Sampling Interval</div>
+          <select id="stepDaysSelect">
+            <option value="1">1 Day</option>
+            <option value="2">2 Days</option>
+            <option value="5" selected>5 Days</option>
+            <option value="10">10 Days</option>
+            <option value="20">20 Days</option>
+            <option value="30">30 Days</option>
+          </select>
+        </div>
+        
+        <div class="buttons-group">
+          <button id="startBtn" class="primary-btn">Start Loading</button>
+          <button id="pauseBtn" disabled>Pause</button>
+          <button id="resetBtn">Reset</button>
+        </div>
+      </div>
+      
+      <div class="progress-container">
+        <div class="progress-info">
+          <span>Loading Progress</span>
+          <span id="progressPercent">0%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress" id="progressBar"></div>
+        </div>
+      </div>
+      
+      <div class="stats">
+        <div class="stat-box">
+          <div class="stat-value" id="dataPoints">0</div>
+          <div class="stat-label">Data Points Loaded</div>
+        </div>
+      </div>
+      
+      <div id="status">
+        <span class="loading" id="loadingIndicator"></span>
+        <span id="statusText">Ready to load data. Select interval and click "Start Loading".</span>
+      </div>
+    </div>
+
+    <div class="chart-area">
+      <div id="chart-container"></div>
+    </div>
+  </div>
+
+
+  <script>
+    // Configuration
+    const CHANNEL_ID = 2598250;
+    const FIELD = 6;
+    const API_KEY = ""; // optional if private
+    const TOTAL_DAYS = 365*1.5;
+    const BAT_CAP = 88; // 90Ah
+    
+    // DOM elements
+    const statusEl = document.getElementById("statusText");
+    const loadingIndicator = document.getElementById("loadingIndicator");
+    const progressBar = document.getElementById("progressBar");
+    const progressPercent = document.getElementById("progressPercent");
+    const startBtn = document.getElementById("startBtn");
+    const pauseBtn = document.getElementById("pauseBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const stepDaysSelect = document.getElementById("stepDaysSelect");
+    const startDatePicker = document.getElementById("startDatePicker");
+    const dataPointsEl = document.getElementById("dataPoints");
+    
+    // Chart and data state
+    let chart;
+    let isPaused = false;
+    let dataset = [];
+    let currentStep = 0;
+    let steps = 0;
+    let stepDays = 5; // Default value
+    let startDate = new Date('2023-07-01'); // Default start date
+    
+    // Calculate steps based on selected interval
+    function calculateSteps() {
+      stepDays = parseInt(stepDaysSelect.value);
+      startDate = new Date(startDatePicker.value);
+      const endDate = new Date(); // Today
+      const diffTime = Math.abs(endDate - startDate);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      steps = Math.ceil(diffDays / stepDays);
+      return steps;
+    }
+    
+    // Initialize chart
+    function initChart() {
+      chart = Highcharts.chart('chart-container', {
+        chart: {
+          type: 'spline',
+          backgroundColor: 'transparent',
+          animation: {
+            duration: 500
+          },
+          zoomType: 'x'
+        },
+        title: {
+          text: null
+        },
+        subtitle: {
+          text: null
+        },
+        xAxis: {
+          type: 'datetime',
+          labels: {
+            style: { color: '#aaa' },
+            format: '{value:%d/%m/%Y}'
+          },
+          title: {
+            text: 'Date',
+            style: { color: '#aaa' }
+          },
+          gridLineColor: '#333',
+          gridLineWidth: 1
+        },
+        yAxis: {
+          title: {
+            text: 'Battery Cycles',
+            style: { color: '#aaa' }
+          },
+          labels: {
+            style: { color: '#aaa' }
+          },
+          gridLineColor: '#333',
+          gridLineWidth: 1
+        },
+        tooltip: {
+          shared: true,
+          crosshairs: true,
+          backgroundColor: 'rgba(30, 30, 30, 0.9)',
+          style: { color: '#fff' },
+          xDateFormat: '%d/%m/%Y %H:%M:%S',
+          dateTimeLabelFormats: {
+            day: '%d/%m/%Y',
+            hour: '%d/%m/%Y %H:%M',
+            minute: '%d/%m/%Y %H:%M',
+            second: '%d/%m/%Y %H:%M:%S'
+          },
+          valueDecimals: 1
+        },
+        plotOptions: {
+          series: {
+            marker: {
+              enabled: true,
+              radius: 4,
+              fillColor: '#4caf50',
+              lineColor: '#fff',
+              lineWidth: 1
+            },
+            lineWidth: 3,
+            color: '#4caf50',
+            states: {
+              hover: {
+                lineWidth: 4
+              }
+            }
+          }
+        },
+        series: [{
+          name: 'Battery Cycles',
+          data: []
+        }],
+        credits: {
+          enabled: false
+        },
+        exporting: {
+          enabled: true,
+          buttons: {
+            contextButton: {
+              theme: {
+                fill: '#2a2a2a',
+                states: {
+                  hover: {
+                    fill: '#3a3a3a'
+                  }
+                }
+              }
+            }
+          }
+        },
+        legend: {
+          enabled: false
+        },
+        responsive: {
+          rules: [{
+            condition: {
+              maxWidth: 500
+            },
+            chartOptions: {
+              legend: {
+                layout: 'horizontal',
+                align: 'center',
+                verticalAlign: 'bottom'
+              }
+            }
+          }]
+        }
+      });
+    }
+    
+    // Update status display
+    function setStatus(text, showLoading = false) {
+      statusEl.textContent = text;
+      loadingIndicator.style.display = showLoading ? 'inline-block' : 'none';
+    }
+    
+    // Update progress bar
+    function updateProgress(step) {
+      const progress = Math.round((step / steps) * 100);
+      progressBar.style.width = `${progress}%`;
+      progressPercent.textContent = `${progress}%`;
+    }
+    
+    // Update statistics
+    function updateStats() {
+      const validData = dataset.filter(d => d[1] !== null);
+      dataPointsEl.textContent = validData.length;
+    }
+    
+    // Add days to a date
+    function addDays(d, n) { 
+      const x = new Date(d); 
+      x.setDate(x.getDate() + n); 
+      return x; 
+    }
+    
+    // Fetch data from ThingSpeak
+    async function fetchRangeData(start, end) {
+      const startStr = start.toISOString();
+      const endStr = end.toISOString();
+      let url = `https://api.thingspeak.com/channels/${CHANNEL_ID}/fields/${FIELD}.json?start=${encodeURIComponent(startStr)}&end=${encodeURIComponent(endStr)}&timezone=UTC`;
+      if (API_KEY) url += `&api_key=${API_KEY}`;
+      const r = await fetch(url);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    }
+    
+    // Load data step by step
+    async function loadDataStepByStep() {
+      const endDate = new Date(); // Today
+      
+      // Calculate delay based on step days to maintain reasonable loading speed
+      const DELAY_MS = Math.max(50, 150 - (stepDays * 10));
+      
+      for (; currentStep < steps; currentStep++) {
+        if (isPaused) {
+          setStatus(`Loading paused at ${currentStep+1}/${steps}. Click 'Start Loading' to continue.`);
+          return;
+        }
+        
+        const day = addDays(startDate, currentStep * stepDays);
+        // take 1-hour window starting at 00:00 UTC
+        const hourStart = new Date(day);
+        const hourEnd = new Date(hourStart);
+        hourEnd.setHours(hourEnd.getHours() + 1);
+        
+        setStatus(`Fetching ${currentStep+1}/${steps} (${hourStart.toISOString().slice(0,10)})`, true);
+        
+        try {
+          const js = await fetchRangeData(hourStart, hourEnd);
+          if (js.feeds && js.feeds.length) {
+            const last = js.feeds[js.feeds.length-1];
+            const val = parseFloat(last[`field${FIELD}`])/BAT_CAP;
+            dataset.push([day.getTime(), isFinite(val) ? val : null]);
+          } else {
+            dataset.push([day.getTime(), null]);
+          }
+        } catch(err) {
+          console.error("Fetch error", err);
+          dataset.push([day.getTime(), null]);
+        }
+        
+        // Update chart with new data
+        chart.series[0].setData(dataset, true, false, false);
+        
+        // Update stats
+        updateStats();
+        updateProgress(currentStep + 1);
+        
+        await new Promise(r => setTimeout(r, DELAY_MS));
+      }
+      
+            // Fetch the very latest value to reflect current reality
+      setStatus("Fetching latest value...", true);
+      try {
+        const lastValueUrl = `https://api.thingspeak.com/channels/${CHANNEL_ID}/fields/${FIELD}/last.json`;
+        const lastResponse = await fetch(lastValueUrl);
+        if (lastResponse.ok) {
+          const lastData = await lastResponse.json();
+          if (lastData && lastData.field6) {
+            const lastValue = parseFloat(lastData.field6)/BAT_CAP;
+            const lastDate = new Date(lastData.created_at);
+            
+            // Check if we already have this date in our dataset
+            const existingIndex = dataset.findIndex(d => {
+              const dDate = new Date(d[0]);
+              return dDate.toDateString() === lastDate.toDateString();
+            });
+            
+            if (existingIndex >= 0) {
+              // Update existing value if we have this date
+              dataset[existingIndex][1] = isFinite(lastValue) ? lastValue : null;
+            } else {
+              // Add as new point if we don't have this date
+              dataset.push([lastDate.getTime(), isFinite(lastValue) ? lastValue : null]);
+            }
+            
+            // Update chart with latest value
+            chart.series[0].setData(dataset, true, false, false);
+            updateStats();
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching latest value:", err);
+      }
+      
+      setStatus(`Complete! Loaded ${dataset.filter(d => d[1] !== null).length} data points with ${stepDays}-day intervals (including latest value).`);
+      startBtn.disabled = false;
+      pauseBtn.disabled = true;
+    }
+    
+    // Reset chart and data
+    function resetChart() {
+      isPaused = false;
+      dataset = [];
+      currentStep = 0;
+      updateProgress(0);
+      chart.series[0].setData([], true, false, false);
+      updateStats();
+      setStatus("Chart reset. Select interval and click 'Start Loading'.");
+      startBtn.disabled = false;
+      pauseBtn.disabled = true;
+    }
+    
+    // Event listeners
+    startBtn.addEventListener('click', () => {
+      isPaused = false;
+      startBtn.disabled = true;
+      pauseBtn.disabled = false;
+      
+      // Recalculate steps if interval or start date changed
+      const newSteps = calculateSteps();
+      if (newSteps !== steps || startDatePicker.value !== startDate.toISOString().slice(0,10)) {
+        steps = newSteps;
+        // If we're changing the interval or start date, we need to reset
+        if (currentStep > 0) {
+          resetChart();
+        }
+      }
+      
+      loadDataStepByStep();
+    });
+    
+    pauseBtn.addEventListener('click', () => {
+      isPaused = true;
+      startBtn.disabled = false;
+      pauseBtn.disabled = true;
+      setStatus(`Loading paused at ${currentStep+1}/${steps}. Click 'Start Loading' to continue.`);
+    });
+    
+    resetBtn.addEventListener('click', resetChart);
+    
+    // Initialize the chart when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+      initChart();
+      calculateSteps(); // Initialize steps calculation
+    });
+    
+    // Handle window resize
+    window.addEventListener('resize', function() {
+      if (chart) {
+        chart.reflow();
+      }
+    });
+  </script>
+</body>
+</html>
