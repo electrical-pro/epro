@@ -446,286 +446,311 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script>
-        // Global variables to store data and chart instance
-        let allFeeds = [];
-        let outageChart = null;
-        let updateInterval;
-        const fiveMinutes = 14 * 60 * 1000; // 15 minutes in milliseconds
-        const UPDATE_INTERVAL = 60000; // 60 seconds
-
-        document.addEventListener("DOMContentLoaded", function() {
-            // Initial load with full dataset
-            loadQuickPreview();
-            
-            // Set up periodic updates
-            setupLiveUpdates();
-        });
-
-        async function loadInitialData() {
-    const timestamp = new Date().getTime();
-    const url = `https://api.thingspeak.com/channels/1288695/fields/1.json?offset=0&results=5400&key=KMPJJFINTMO4GWQK&_=${timestamp}`;
+<script>
+    // Global variables to store data and chart instance
+    let allFeeds = [];
+    let outageChart = null;
+    let updateInterval;
     
-    try {
-        const response = await fetch(url);
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let firstChunkProcessed = false;
+    // Separate thresholds for historical gaps and current state
+    const historicalGapThreshold = 15 * 60 * 1000; // 14 minutes for historical gaps
+    const currentStateThreshold = 2 * 60 * 1000;   // 2 minutes for current state detection
+    const UPDATE_INTERVAL = 60000; // 60 seconds
+
+    document.addEventListener("DOMContentLoaded", function() {
+        // Initial load with full dataset
+        loadQuickPreview();
         
-        while (true) {
-            const { done, value } = await reader.read();
+        // Set up periodic updates
+        setupLiveUpdates();
+    });
+
+    async function loadInitialData() {
+        const timestamp = new Date().getTime();
+        const url = `https://api.thingspeak.com/channels/1288695/fields/1.json?offset=0&results=5400&key=KMPJJFINTMO4GWQK&_=${timestamp}`;
+        
+        try {
+            const response = await fetch(url);
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let firstChunkProcessed = false;
             
-            if (done) break;
-            
-            buffer += decoder.decode(value, { stream: true });
-            
-            // Try to parse what we have so far
-            if (!firstChunkProcessed && buffer.length > 5000) { // Wait for reasonable amount of data
-                try {
-                    const partialData = JSON.parse(buffer);
-                    if (partialData.feeds && partialData.feeds.length > 0) {
-                        allFeeds = partialData.feeds;
-                        processData();
-                        firstChunkProcessed = true;
+            while (true) {
+                const { done, value } = await reader.read();
+                
+                if (done) break;
+                
+                buffer += decoder.decode(value, { stream: true });
+                
+                // Try to parse what we have so far
+                if (!firstChunkProcessed && buffer.length > 5000) {
+                    try {
+                        const partialData = JSON.parse(buffer);
+                        if (partialData.feeds && partialData.feeds.length > 0) {
+                            allFeeds = partialData.feeds;
+                            processData();
+                            firstChunkProcessed = true;
+                        }
+                    } catch (e) {
+                        // Not enough data yet to parse, continue reading
                     }
-                } catch (e) {
-                    // Not enough data yet to parse, continue reading
                 }
             }
+            
+            // Final parse with complete data
+            const finalData = JSON.parse(buffer);
+            allFeeds = finalData.feeds;
+            processData();
+            
+        } catch (error) {
+            console.error('Error fetching data:', error);
+            document.getElementById('results').innerHTML = '<p>Error loading data. Please try again later.</p>';
         }
-        
-        // Final parse with complete data
-        const finalData = JSON.parse(buffer);
-        allFeeds = finalData.feeds;
-        processData();
-        
-    } catch (error) {
-        console.error('Error fetching data:', error);
-        document.getElementById('results').innerHTML = '<p>Error loading data. Please try again later.</p>';
     }
-}
 
-        function loadQuickPreview() {
-            const timestamp = new Date().getTime();
-            const url = `https://api.thingspeak.com/channels/1288695/fields/1.json?offset=0&results=420&key=KMPJJFINTMO4GWQK&_=${timestamp}`;
-            
-            fetch(url)
-                .then(response => response.json())
-                .then(data => {
-                    allFeeds = data.feeds;
+    function loadQuickPreview() {
+        const timestamp = new Date().getTime();
+        const url = `https://api.thingspeak.com/channels/1288695/fields/1.json?offset=0&results=420&key=KMPJJFINTMO4GWQK&_=${timestamp}`;
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                allFeeds = data.feeds;
+                processData();
+                
+                // Immediately start loading full dataset in background
+                loadFullDataset();
+            })
+            .catch(error => {
+                console.error('Error fetching preview data:', error);
+                document.getElementById('results').innerHTML = '<p>Error loading data. Please try again later.</p>';
+            });
+    }
+
+    function loadFullDataset() {
+        const timestamp = new Date().getTime();
+        const url = `https://api.thingspeak.com/channels/1288695/fields/1.json?offset=0&results=5400&key=KMPJJFINTMO4GWQK&_=${timestamp}`;
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                allFeeds = data.feeds;
+                processData();
+            })
+            .catch(error => {
+                console.error('Error fetching full data:', error);
+                // Don't show error if we already have preview data
+            });
+    }
+
+    function updateLiveData() {
+        const timestamp = new Date().getTime();
+        const url = `https://api.thingspeak.com/channels/1288695/fields/1.json?offset=0&results=120&key=KMPJJFINTMO4GWQK&_=${timestamp}`;
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.feeds && data.feeds.length > 0) {
+                    // Merge new data with existing data, avoiding duplicates
+                    mergeNewData(data.feeds);
                     processData();
-                    
-                    // Immediately start loading full dataset in background
-                    loadFullDataset();
-                })
-                .catch(error => {
-                    console.error('Error fetching preview data:', error);
-                    document.getElementById('results').innerHTML = '<p>Error loading data. Please try again later.</p>';
-                });
-        }
-
-
-        function loadFullDataset() {
-            const timestamp = new Date().getTime();
-            const url = `https://api.thingspeak.com/channels/1288695/fields/1.json?offset=0&results=5400&key=KMPJJFINTMO4GWQK&_=${timestamp}`;
-            
-            fetch(url)
-                .then(response => response.json())
-                .then(data => {
-                    allFeeds = data.feeds;
-                    processData();
-                })
-                .catch(error => {
-                    console.error('Error fetching initial data:', error);
-                    document.getElementById('results').innerHTML = '<p>Error loading data. Please try again later.</p>';
-                });
-        }
-
-        function updateLiveData() {
-            const timestamp = new Date().getTime();
-            const url = `https://api.thingspeak.com/channels/1288695/fields/1.json?offset=0&results=120&key=KMPJJFINTMO4GWQK&_=${timestamp}`;
-            
-            fetch(url)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.feeds && data.feeds.length > 0) {
-                        // Merge new data with existing data, avoiding duplicates
-                        mergeNewData(data.feeds);
-                        processData();
-                    }
-                })
-                .catch(error => {
-                    console.error('Error updating data:', error);
-                });
-        }
-
-        function mergeNewData(newFeeds) {
-            if (newFeeds.length === 0) return;
-            
-            // Find the latest entry_id in our current data
-            const latestEntryId = allFeeds.length > 0 
-                ? Math.max(...allFeeds.map(feed => parseInt(feed.entry_id)))
-                : 0;
-            
-            // Filter out any entries we already have
-            const uniqueNewFeeds = newFeeds.filter(feed => 
-                parseInt(feed.entry_id) > latestEntryId
-            );
-            
-            // Add new entries to our data
-            allFeeds = [...allFeeds, ...uniqueNewFeeds];
-            
-            // Sort by entry_id to maintain chronological order
-            allFeeds.sort((a, b) => parseInt(a.entry_id) - parseInt(b.entry_id));
-        }
-
-        function processData() {
-            const gaps = findDataGaps(allFeeds);
-            displayGaps(gaps, allFeeds);
-            createOutageChart(gaps);
-            updateLastUpdateTime(allFeeds);
-            updateStatusMessage(allFeeds);
-            findVoltageExtremes(allFeeds);
-        }
-
-        function setupLiveUpdates() {
-            // Start the update interval
-            updateInterval = setInterval(updateLiveData, UPDATE_INTERVAL);
-        }
-
-
-
-        function findDataGaps(feeds) {
-            const gaps = [];
-
-            for (let i = 1; i < feeds.length; i++) {
-                const previousTime = new Date(feeds[i - 1].created_at).getTime();
-                const currentTime = new Date(feeds[i].created_at).getTime();
-                const difference = currentTime - previousTime;
-
-                if (difference >= fiveMinutes) {
-                    const gapDurationMinutes = difference / (60 * 1000);
-                    gaps.push({
-                        start: feeds[i - 1].created_at,
-                        end: feeds[i].created_at,
-                        duration: gapDurationMinutes,
-                        hasPower: false
-                    });
-                } else {
-                    if (i == 1 || gaps[gaps.length - 1].hasPower === false) {
-                        gaps.push({
-                            start: feeds[i - 1].created_at,
-                            end: feeds[i].created_at,
-                            duration: difference / (60 * 1000),
-                            hasPower: true
-                        });
-                    } else {
-                        gaps[gaps.length - 1].end = feeds[i].created_at;
-                        gaps[gaps.length - 1].duration += difference / (60 * 1000);
-                    }
                 }
-            }
+            })
+            .catch(error => {
+                console.error('Error updating data:', error);
+            });
+    }
 
-            // Check the last data point
-            const lastTime = new Date(feeds[feeds.length - 1].created_at).getTime();
-            const now = new Date().getTime();
-            const currentDifference = now - lastTime;
+    function mergeNewData(newFeeds) {
+        if (newFeeds.length === 0) return;
+        
+        // Find the latest entry_id in our current data
+        const latestEntryId = allFeeds.length > 0 
+            ? Math.max(...allFeeds.map(feed => parseInt(feed.entry_id)))
+            : 0;
+        
+        // Filter out any entries we already have
+        const uniqueNewFeeds = newFeeds.filter(feed => 
+            parseInt(feed.entry_id) > latestEntryId
+        );
+        
+        // Add new entries to our data
+        allFeeds = [...allFeeds, ...uniqueNewFeeds];
+        
+        // Sort by entry_id to maintain chronological order
+        allFeeds.sort((a, b) => parseInt(a.entry_id) - parseInt(b.entry_id));
+    }
 
-            if (currentDifference >= fiveMinutes) {
-                const ongoingDurationMinutes = currentDifference / (60 * 1000);
+    function processData() {
+        const gaps = findDataGaps(allFeeds);
+        displayGaps(gaps, allFeeds);
+        createOutageChart(gaps);
+        updateLastUpdateTime(allFeeds);
+        updateStatusMessage(allFeeds);
+        findVoltageExtremes(allFeeds);
+    }
+
+    function setupLiveUpdates() {
+        // Start the update interval
+        updateInterval = setInterval(updateLiveData, UPDATE_INTERVAL);
+    }
+
+    function findDataGaps(feeds) {
+        const gaps = [];
+
+        for (let i = 1; i < feeds.length; i++) {
+            const previousTime = new Date(feeds[i - 1].created_at).getTime();
+            const currentTime = new Date(feeds[i].created_at).getTime();
+            const difference = currentTime - previousTime;
+
+            if (difference >= historicalGapThreshold) {
+                const gapDurationMinutes = difference / (60 * 1000);
                 gaps.push({
-                    start: feeds[feeds.length - 1].created_at,
-                    end: 'ongoing',
-                    duration: ongoingDurationMinutes,
+                    start: feeds[i - 1].created_at,
+                    end: feeds[i].created_at,
+                    duration: gapDurationMinutes,
                     hasPower: false
                 });
             } else {
-                if (gaps.length > 0 && gaps[gaps.length - 1].hasPower) {
-                    gaps[gaps.length - 1].end = 'ongoing';
-                    gaps[gaps.length - 1].duration += currentDifference / (60 * 1000);
-                } else {
+                if (i == 1 || gaps[gaps.length - 1].hasPower === false) {
                     gaps.push({
-                        start: feeds[feeds.length - 1].created_at,
-                        end: 'ongoing',
-                        duration: currentDifference / (60 * 1000),
+                        start: feeds[i - 1].created_at,
+                        end: feeds[i].created_at,
+                        duration: difference / (60 * 1000),
                         hasPower: true
                     });
+                } else {
+                    gaps[gaps.length - 1].end = feeds[i].created_at;
+                    gaps[gaps.length - 1].duration += difference / (60 * 1000);
                 }
             }
-
-            return gaps;
         }
 
-        function displayGaps(gaps, feeds) {
-            const resultsDiv = document.getElementById('results');
-            resultsDiv.innerHTML = '';
+        // Check the last data point
+        const lastTime = new Date(feeds[feeds.length - 1].created_at).getTime();
+        const now = new Date().getTime();
+        const currentDifference = now - lastTime;
 
-            if (gaps.length === 0) {
-                resultsDiv.innerHTML = '<p>No power outages of 5 minutes or more detected.</p>';
+        if (currentDifference >= historicalGapThreshold) {
+            const ongoingDurationMinutes = currentDifference / (60 * 1000);
+            gaps.push({
+                start: feeds[feeds.length - 1].created_at,
+                end: 'ongoing',
+                duration: ongoingDurationMinutes,
+                hasPower: false
+            });
+        } else {
+            if (gaps.length > 0 && gaps[gaps.length - 1].hasPower) {
+                gaps[gaps.length - 1].end = 'ongoing';
+                gaps[gaps.length - 1].duration += currentDifference / (60 * 1000);
             } else {
-                const table = document.createElement('table');
-                table.classList.add('styled-table');
-                table.innerHTML = `
-                    <thead>
-                        <tr>
-                            <th>Start Time</th>
-                            <th>End Time</th>
-                            <th>Duration</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    </tbody>
-                `;
+                gaps.push({
+                    start: feeds[feeds.length - 1].created_at,
+                    end: 'ongoing',
+                    duration: currentDifference / (60 * 1000),
+                    hasPower: true
+                });
+            }
+        }
 
-                const tbody = table.querySelector('tbody');
+        return gaps;
+    }
 
-                // Show only the most recent 50 periods in the table for better performance
-                const recentGaps = gaps.slice(-50);
+    function displayGaps(gaps, feeds) {
+        const resultsDiv = document.getElementById('results');
+        resultsDiv.innerHTML = '';
+
+        if (gaps.length === 0) {
+            resultsDiv.innerHTML = '<p>No power outages detected.</p>';
+        } else {
+            const table = document.createElement('table');
+            table.classList.add('styled-table');
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th>Start Time</th>
+                        <th>End Time</th>
+                        <th>Duration</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            `;
+
+            const tbody = table.querySelector('tbody');
+            
+            // Check current state
+            const lastTime = new Date(feeds[feeds.length - 1].created_at).getTime();
+            const now = new Date().getTime();
+            const minutesSinceLast = Math.floor((now - lastTime) / (60 * 1000));
+            const isCurrentlyInBlackout = minutesSinceLast > 2;
+            
+            // Show only the most recent 50 periods in the table
+            const recentGaps = gaps.slice(-50);
+            
+            recentGaps.forEach(gap => {
+                const localStart = formatDateTime(gap.start);
+                let localEnd;
+                let displayHasPower = gap.hasPower;
                 
-                recentGaps.forEach(gap => {
-                    const localStart = formatDateTime(gap.start);
-                    let localEnd;
-                    
-                    if (gap.end === 'ongoing') {
-                        if (gap.hasPower) {
-                            localEnd = `<span class="ongoing-power">Power Available</span>`;
+                if (gap.end === 'ongoing') {
+                    if (gap.hasPower) {
+                        // Power period is ongoing according to historical threshold
+                        if (isCurrentlyInBlackout) {
+                            // But we have no recent data, so override the status
+                            localEnd = `<span class="ongoing-blackout">Data Stale (${minutesSinceLast}m)</span>`;
+                            displayHasPower = false;
                         } else {
-                            localEnd = `<span class="ongoing-blackout">Ongoing Blackout</span>`;
+                            localEnd = `<span class="ongoing-power">Power Available</span>`;
                         }
                     } else {
-                        localEnd = formatDateTime(gap.end);
+                        localEnd = `<span class="ongoing-blackout">Ongoing Blackout</span>`;
                     }
-                    
-                    const hours = Math.floor(gap.duration / 60);
-                    const minutes = Math.floor(gap.duration % 60);
-                    const row = document.createElement('tr');
-                    row.classList.add(gap.hasPower ? 'power-row' : 'blackout-row');
-                    row.innerHTML = `
-                        <td>${localStart}</td>
-                        <td>${localEnd}</td>
-                        <td>${hours}h ${minutes}m</td>
-                        <td><span class="status-badge ${gap.hasPower ? 'status-power' : 'status-blackout'}">${gap.hasPower ? 'Power' : 'Blackout'}</span></td>
-                    `;
-                    tbody.appendChild(row);
-                });
-
-                resultsDiv.appendChild(table);
-                
-                // Add a note if there are more periods
-                if (gaps.length > 50) {
-                    const note = document.createElement('p');
-                    note.style.marginTop = '15px';
-                    note.style.textAlign = 'center';
-                    note.style.color = '#94a3b8';
-                    note.innerHTML = `Showing 50 most recent periods out of ${gaps.length} total`;
-                    resultsDiv.appendChild(note);
+                } else {
+                    localEnd = formatDateTime(gap.end);
                 }
-            }
-        }
+                
+                const hours = Math.floor(gap.duration / 60);
+                const minutes = Math.floor(gap.duration % 60);
+                const row = document.createElement('tr');
+                row.classList.add(displayHasPower ? 'power-row' : 'blackout-row');
+                row.innerHTML = `
+                    <td>${localStart}</td>
+                    <td>${localEnd}</td>
+                    <td>${hours}h ${minutes}m</td>
+                    <td><span class="status-badge ${displayHasPower ? 'status-power' : 'status-blackout'}">${displayHasPower ? 'Power' : 'Blackout'}</span></td>
+                `;
+                tbody.appendChild(row);
+            });
 
-        // NEW FUNCTION: Find and display voltage extremes
+            resultsDiv.appendChild(table);
+            
+            // Add a note if there are more periods
+            if (gaps.length > 50) {
+                const note = document.createElement('p');
+                note.style.marginTop = '15px';
+                note.style.textAlign = 'center';
+                note.style.color = '#94a3b8';
+                note.innerHTML = `Showing 50 most recent periods out of ${gaps.length} total`;
+                resultsDiv.appendChild(note);
+            }
+            
+            // Add current status note
+            const currentStatus = document.createElement('p');
+            currentStatus.style.marginTop = '10px';
+            currentStatus.style.textAlign = 'center';
+            currentStatus.style.fontSize = '0.9em';
+            // if (isCurrentlyInBlackout) {
+            //     currentStatus.innerHTML = `<span class="ongoing-blackout">⚠️ Power may be OFF (last update: ${minutesSinceLast} min. ago)</span>`;
+            // } else {
+            //     currentStatus.innerHTML = `<span class="ongoing-power">✓ Recent data available - power appears to be ON</span>`;
+            // }
+            resultsDiv.appendChild(currentStatus);
+        }
+    }
+       // NEW FUNCTION: Find and display voltage extremes
         function findVoltageExtremes(feeds) {
             if (!feeds || feeds.length === 0) {
                 document.getElementById('voltageExtremes').innerHTML = '<p>No voltage data available.</p>';
@@ -819,181 +844,183 @@
             voltageDiv.appendChild(table);
         }
 
-        function formatDateTime(dateTime) {
-            const date = new Date(dateTime);
-            const day = String(date.getDate()).padStart(2, '0');
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const year = date.getFullYear();
-            const hours = String(date.getHours()).padStart(2, '0');
-            const minutes = String(date.getMinutes()).padStart(2, '0');
-            const seconds = String(date.getSeconds()).padStart(2, '0');
+    function formatDateTime(dateTime) {
+        const date = new Date(dateTime);
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
 
-            return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
-        }
+        return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+    }
 
-        function createOutageChart(gaps) {
-            // Limit the number of data points to prevent performance issues
-            const maxDataPoints = 50;
-            const displayGaps = gaps.length > maxDataPoints ? gaps.slice(-maxDataPoints) : gaps;
-            
-            // Create simpler labels for the chart
-            const labels = displayGaps.map((gap, index) => {
-                const date = new Date(gap.start);
-                return `${date.getDate()}/${date.getMonth()+1} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
-            });
-            
-            const datasets = [
-                {
-                    label: 'Blackout Duration',
-                    data: displayGaps.map(gap => !gap.hasPower ? gap.duration : 0),
-                    backgroundColor: '#ff416c',
-                    borderRadius: 5,
-                },
-                {
-                    label: 'Power Duration',
-                    data: displayGaps.map(gap => gap.hasPower ? gap.duration : 0),
-                    backgroundColor: '#00d2ff',
-                    borderRadius: 5,
-                }
-            ];
-
-            const ctx = document.getElementById('outageChart').getContext('2d');
-            
-            // Destroy existing chart if it exists
-            if (outageChart) {
-                outageChart.destroy();
+    function createOutageChart(gaps) {
+        // Limit the number of data points to prevent performance issues
+        const maxDataPoints = 50;
+        const displayGaps = gaps.length > maxDataPoints ? gaps.slice(-maxDataPoints) : gaps;
+        
+        // Create simpler labels for the chart
+        const labels = displayGaps.map((gap, index) => {
+            const date = new Date(gap.start);
+            return `${date.getDate()}/${date.getMonth()+1} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+        });
+        
+        const datasets = [
+            {
+                label: 'Blackout Duration',
+                data: displayGaps.map(gap => !gap.hasPower ? gap.duration : 0),
+                backgroundColor: '#ff416c',
+                borderRadius: 5,
+            },
+            {
+                label: 'Power Duration',
+                data: displayGaps.map(gap => gap.hasPower ? gap.duration : 0),
+                backgroundColor: '#00d2ff',
+                borderRadius: 5,
             }
-            
-            outageChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: datasets
+        ];
+
+        const ctx = document.getElementById('outageChart').getContext('2d');
+        
+        // Destroy existing chart if it exists
+        if (outageChart) {
+            outageChart.destroy();
+        }
+        
+        outageChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: {
+                    duration: 0
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    animation: {
-                        duration: 0 // disables animation only on initial draw
-                    },
-                    hover: {
-                        animationDuration: 400 // keeps smooth hover transitions
-                    },
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                color: '#e2e8f0',
-                                font: {
-                                    size: window.innerWidth < 768 ? 10 : 12
-                                }
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                title: function(tooltipItems) {
-                                    const gap = displayGaps[tooltipItems[0].dataIndex];
-                                    const start = formatDateTime(gap.start);
-                                    let end;
-                                    if (gap.end === 'ongoing') {
-                                        if (gap.hasPower) {
-                                            end = 'Power Available';
-                                        } else {
-                                            end = 'Ongoing Blackout';
-                                        }
-                                    } else {
-                                        end = formatDateTime(gap.end);
-                                    }
-                                    return `${start} to ${end}`;
-                                },
-                                label: function(context) {
-                                    const label = context.dataset.label || '';
-                                    const value = context.raw;
-                                    const hours = Math.floor(value / 60);
-                                    const minutes = Math.floor(value % 60);
-                                    return `${label}: ${hours}h ${minutes}m`;
-                                }
+                hover: {
+                    animationDuration: 400
+                },
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: '#e2e8f0',
+                            font: {
+                                size: window.innerWidth < 768 ? 10 : 12
                             }
                         }
                     },
-                    scales: {
-                        x: {
-                            stacked: true,
-                            grid: {
-                                color: 'rgba(255, 255, 255, 0.1)'
-                            },
-                            ticks: {
-                                color: '#94a3b8',
-                                maxRotation: window.innerWidth < 768 ? 45 : 0,
-                                minRotation: window.innerWidth < 768 ? 45 : 0,
-                                font: {
-                                    size: window.innerWidth < 768 ? 9 : 11
+                    tooltip: {
+                        callbacks: {
+                            title: function(tooltipItems) {
+                                const gap = displayGaps[tooltipItems[0].dataIndex];
+                                const start = formatDateTime(gap.start);
+                                let end;
+                                if (gap.end === 'ongoing') {
+                                    if (gap.hasPower) {
+                                        end = 'Power Available';
+                                    } else {
+                                        end = 'Ongoing Blackout';
+                                    }
+                                } else {
+                                    end = formatDateTime(gap.end);
                                 }
+                                return `${start} to ${end}`;
+                            },
+                            label: function(context) {
+                                const label = context.dataset.label || '';
+                                const value = context.raw;
+                                const hours = Math.floor(value / 60);
+                                const minutes = Math.floor(value % 60);
+                                return `${label}: ${hours}h ${minutes}m`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        stacked: true,
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: '#94a3b8',
+                            maxRotation: window.innerWidth < 768 ? 45 : 0,
+                            minRotation: window.innerWidth < 768 ? 45 : 0,
+                            font: {
+                                size: window.innerWidth < 768 ? 9 : 11
+                            }
+                        }
+                    },
+                    y: {
+                        stacked: true,
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: '#94a3b8',
+                            callback: function(value) {
+                                const hours = Math.floor(value / 60);
+                                const minutes = Math.floor(value % 60);
+                                return `${hours}h ${minutes}m`;
+                            },
+                            font: {
+                                size: window.innerWidth < 768 ? 9 : 11
                             }
                         },
-                        y: {
-                            stacked: true,
-                            grid: {
-                                color: 'rgba(255, 255, 255, 0.1)'
-                            },
-                            ticks: {
-                                color: '#94a3b8',
-                                callback: function(value) {
-                                    const hours = Math.floor(value / 60);
-                                    const minutes = Math.floor(value % 60);
-                                    return `${hours}h ${minutes}m`;
-                                },
-                                font: {
-                                    size: window.innerWidth < 768 ? 9 : 11
-                                }
-                            },
-                            title: {
-                                display: true,
-                                text: 'Duration',
-                                color: '#94a3b8',
-                                font: {
-                                    size: window.innerWidth < 768 ? 10 : 12
-                                }
+                        title: {
+                            display: true,
+                            text: 'Duration',
+                            color: '#94a3b8',
+                            font: {
+                                size: window.innerWidth < 768 ? 10 : 12
                             }
                         }
                     }
                 }
-            });
-        }
+            }
+        });
+    }
 
-        function updateLastUpdateTime(feeds) {
-            if (feeds.length > 0) {
-                const lastUpdate = new Date(feeds[feeds.length - 1].created_at);
-                const lastUpdateFormatted = formatDateTime(lastUpdate);
-                document.getElementById('lastUpdateTime').textContent = lastUpdateFormatted;
+    function updateLastUpdateTime(feeds) {
+        if (feeds.length > 0) {
+            const lastUpdate = new Date(feeds[feeds.length - 1].created_at);
+            const lastUpdateFormatted = formatDateTime(lastUpdate);
+            document.getElementById('lastUpdateTime').textContent = lastUpdateFormatted;
+        }
+    }
+
+    function updateStatusMessage(feeds) {
+        if (feeds.length > 0) {
+            const lastTime = new Date(feeds[feeds.length - 1].created_at).getTime();
+            const now = new Date().getTime();
+            const currentDifference = now - lastTime;
+            const minutesAgo = Math.floor(currentDifference / (60 * 1000));
+            
+            const statusMessage = document.getElementById('statusMessage');
+            const statusText = document.getElementById('statusText');
+            const icon = statusMessage.querySelector('i');
+            
+            // Use currentStateThreshold (2 minutes) for status detection
+            if (currentDifference < currentStateThreshold) {
+                // Power is likely ON - last data point is recent
+                icon.className = "fas fa-check-circle";
+                statusText.textContent = `Power is ON (last update: ${minutesAgo} minute${minutesAgo !== 1 ? 's' : ''} ago)`;
+                statusMessage.style.display = 'block';
+                statusMessage.className = "status-message status-normal";
+            } else {
+                // Power might be OFF - data is stale
+                icon.className = "fas fa-exclamation-triangle";
+                statusText.textContent = "Blackout detected";
+                statusMessage.style.display = 'block';
+                statusMessage.className = "status-message status-warning";
             }
         }
-
-        function updateStatusMessage(feeds) {
-            if (feeds.length > 0) {
-                const lastTime = new Date(feeds[feeds.length - 1].created_at).getTime();
-                const now = new Date().getTime();
-                const currentDifference = now - lastTime;
-                
-                const statusMessage = document.getElementById('statusMessage');
-                const statusText = document.getElementById('statusText');
-                const icon = statusMessage.querySelector('i');
-                
-                if (currentDifference < fiveMinutes) {
-                    // No blackout - use check circle
-                    icon.className = "fas fa-check-circle";
-                    statusText.textContent = "No blackout detected";
-                    statusMessage.style.display = 'block';
-                    statusMessage.className = "status-message status-normal";
-                } else {
-                    // Blackout detected - use exclamation triangle with blinking animation
-                    icon.className = "fas fa-exclamation-triangle";
-                    statusText.textContent = "Blackout detected";
-                    statusMessage.style.display = 'block';
-                    statusMessage.className = "status-message status-warning";
-                }
-            }
-        }
-    </script>
+    }
+</script>
 </body>
 </html>
