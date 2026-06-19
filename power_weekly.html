@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Weekly Consumption — ThingSpeak</title>
+    <style>
+        :root {
+            --bg: #0e1117;
+            --panel: #161b22;
+            --border: #262d38;
+            --text: #e6e9ef;
+            --text-dim: #8b96a5;
+            --green: #3fb950;
+            --red: #e5534b;
+            --accent: #58a6ff;
+            --mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--mono);
+            padding: 32px 24px 60px;
+        }
+
+        .wrap {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        header {
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            margin: 0 0 4px;
+        }
+
+        .subtitle {
+            color: var(--text-dim);
+            font-size: 13px;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: flex-end;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 20px 0;
+        }
+
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .field label {
+            font-size: 11px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .field input {
+            background: #0d1117;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            color: var(--text);
+            padding: 7px 9px;
+            font-family: var(--mono);
+            font-size: 13px;
+            width: 150px;
+        }
+
+        .field input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        button#loadBtn {
+            background: var(--accent);
+            color: #0e1117;
+            border: none;
+            border-radius: 5px;
+            padding: 9px 18px;
+            font-family: var(--mono);
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            height: 34px;
+        }
+
+        button#loadBtn:hover {
+            opacity: 0.9;
+        }
+        button#loadBtn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status {
+            font-size: 12px;
+            color: var(--text-dim);
+            min-height: 18px;
+            margin-top: 4px;
+        }
+
+        .status.err {
+            color: var(--red);
+        }
+
+        .stats {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+
+        .stat {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 16px;
+            flex: 1;
+            min-width: 130px;
+        }
+
+        .stat .label {
+            font-size: 11px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 4px;
+        }
+
+        .stat .value {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .chart-panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px 16px 8px;
+            position: relative;
+        }
+
+        #chart {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        .bar {
+            cursor: pointer;
+            transition: opacity 0.1s;
+        }
+        .bar:hover {
+            opacity: 0.75;
+        }
+
+        .tooltip {
+            position: absolute;
+            pointer-events: none;
+            background: #0d1117;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 10px;
+            font-size: 12px;
+            line-height: 1.5;
+            white-space: nowrap;
+            opacity: 0;
+            transform: translate(-50%, -100%);
+            transition: opacity 0.08s;
+            z-index: 10;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        }
+
+        .tooltip .range {
+            color: var(--text-dim);
+        }
+        .tooltip .delta {
+            font-weight: 600;
+            font-size: 13px;
+            margin-top: 2px;
+        }
+        .tooltip .delta.pos {
+            color: var(--green);
+        }
+        .tooltip .delta.neg {
+            color: var(--red);
+        }
+
+        .axis-label {
+            fill: var(--text-dim);
+            font-size: 10px;
+            font-family: var(--mono);
+        }
+        .grid-line {
+            stroke: var(--border);
+            stroke-width: 1;
+        }
+        .zero-line {
+            stroke: var(--text-dim);
+            stroke-width: 1;
+        }
+
+        .legend {
+            display: flex;
+            gap: 16px;
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-top: 10px;
+            padding-left: 4px;
+        }
+        .legend span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .swatch {
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+            display: inline-block;
+        }
+
+        .overflow-badge {
+            display: inline-block;
+            font-size: 10px;
+            background: #1c2333;
+            color: #f0c94d;
+            padding: 0 8px;
+            border-radius: 10px;
+            margin-left: 6px;
+            border: 1px solid #2d3344;
+        }
+
+        footer {
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 11px;
+            margin-top: 24px;
+        }
+
+        @media (max-width: 600px) {
+            .field input {
+                width: 120px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="wrap">
+        <header>
+            <h1>Weekly Consumption Differences</h1>
+            <div class="subtitle">ThingSpeak field data — week-over-week delta <span class="overflow-badge">overflow @ 6689.9</span></div>
+        </header>
+
+        <div class="controls">
+            <div class="field">
+                <label for="channelId">Channel ID</label>
+                <input type="text" id="channelId" value="1288695" />
+            </div>
+            <div class="field">
+                <label for="fieldId">Field ID</label>
+                <input type="text" id="fieldId" value="4" />
+            </div>
+            <div class="field">
+                <label for="monthsBack">Months Back</label>
+                <input type="number" id="monthsBack" value="18" min="1" max="60" />
+            </div>
+            <button id="loadBtn">Load Data</button>
+        </div>
+        <div class="status" id="status"></div>
+
+        <div class="stats" id="stats" style="display:none;">
+            <div class="stat">
+                <div class="label">Weeks Loaded</div>
+                <div class="value" id="statCount">—</div>
+            </div>
+            <div class="stat">
+                <div class="label">Total Change</div>
+                <div class="value" id="statTotal">—</div>
+            </div>
+            <div class="stat">
+                <div class="label">Avg / Week</div>
+                <div class="value" id="statAvg">—</div>
+            </div>
+            <div class="stat">
+                <div class="label">Peak Week</div>
+                <div class="value" id="statMax">—</div>
+            </div>
+        </div>
+
+        <div class="chart-panel">
+            <svg id="chart"></svg>
+            <div class="tooltip" id="tooltip"></div>
+            <div class="legend">
+                <span><span class="swatch" style="background:var(--green)"></span> Increase vs. previous week</span>
+                <span><span class="swatch" style="background:var(--red)"></span> Decrease vs. previous week</span>
+                <span style="color:var(--text-dim);font-size:10px;margin-left:auto;">↻ overflow-corrected</span>
+            </div>
+        </div>
+
+        <footer>Hover or tap a bar to see its exact date range and value.</footer>
+    </div>
+
+    <script>
+        (function() {
+            // ─── overflow threshold ────────────────────────────────────────────
+            const MAX_COUNTER = 6689.9;
+
+            const els = {
+                channelId: document.getElementById('channelId'),
+                fieldId: document.getElementById('fieldId'),
+                monthsBack: document.getElementById('monthsBack'),
+                loadBtn: document.getElementById('loadBtn'),
+                status: document.getElementById('status'),
+                stats: document.getElementById('stats'),
+                statCount: document.getElementById('statCount'),
+                statTotal: document.getElementById('statTotal'),
+                statAvg: document.getElementById('statAvg'),
+                statMax: document.getElementById('statMax'),
+                svg: document.getElementById('chart'),
+                tooltip: document.getElementById('tooltip'),
+                chartPanel: document.querySelector('.chart-panel'),
+            };
+
+            function fmtDate(d) {
+                return d.toISOString().slice(0, 10);
+            }
+
+            function startOfWeek(d) {
+                // Monday-based week (Mon=0 … Sun=6)
+                const day = (d.getDay() + 6) % 7;
+                const monday = new Date(d);
+                monday.setDate(d.getDate() - day);
+                monday.setHours(0, 0, 0, 0);
+                return monday;
+            }
+
+            // ─── fetch a single day's value ───────────────────────────────────
+            async function fetchChannelValue(channelId, fieldId, dateStr) {
+                const start = new Date(dateStr + 'T00:00:00Z');
+                const next = new Date(start);
+                next.setUTCDate(next.getUTCDate() + 1);
+                const url =
+                    `https://api.thingspeak.com/channels/${channelId}/fields/${fieldId}.json?start=${fmtDate(start)}&end=${fmtDate(next)}`;
+
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const json = await res.json();
+                if (!json.feeds || json.feeds.length === 0) return null;
+                const fieldKey = `field${fieldId}`;
+                const raw = json.feeds[0][fieldKey];
+                if (raw === null || raw === undefined) return null;
+                return parseFloat(raw);
+            }
+
+            // ─── main load ─────────────────────────────────────────────────────
+            async function loadData() {
+                const channelId = els.channelId.value.trim();
+                const fieldId = els.fieldId.value.trim();
+                const monthsBack = parseInt(els.monthsBack.value, 10) || 18;
+
+                els.loadBtn.disabled = true;
+                els.status.className = 'status';
+                els.status.textContent = 'Fetching weekly data…';
+                els.stats.style.display = 'none';
+
+                const now = new Date();
+                let cursor = new Date(now);
+                cursor.setMonth(cursor.getMonth() - monthsBack);
+                cursor.setDate(1);
+                cursor.setHours(0, 0, 0, 0);
+
+                const dates = [];
+                const weekEnds = [];
+                const differences = [];
+                let overflowCount = 0;
+
+                let previousData = null;
+                let fetchedWeeks = 0;
+                let failedWeeks = 0;
+
+                try {
+                    while (cursor <= now) {
+                        const weekStart = startOfWeek(cursor);
+                        const weekEnd = new Date(weekStart);
+                        weekEnd.setDate(weekEnd.getDate() + 6);
+
+                        let value = null;
+                        try {
+                            value = await fetchChannelValue(channelId, fieldId, fmtDate(weekStart));
+                        } catch (_) {
+                            value = null;
+                        }
+
+                        if (value !== null && !Number.isNaN(value)) {
+                            fetchedWeeks++;
+                            if (previousData !== null) {
+                                let rawDiff = value - previousData;
+                                let diff = rawDiff;
+                                let overflowed = false;
+
+                                // ── overflow detection ──
+                                if (value < previousData) {
+                                    // counter reset: actual consumption = (MAX - prev) + current
+                                    diff = (MAX_COUNTER - previousData) + value;
+                                    overflowed = true;
+                                    overflowCount++;
+                                }
+
+                                // guard against tiny negative values due to float noise
+                                if (diff < 0 && diff > -0.001) diff = 0;
+
+                                dates.push(new Date(weekStart));
+                                weekEnds.push(new Date(weekEnd));
+                                differences.push(diff);
+                            }
+                            previousData = value;
+                        } else {
+                            failedWeeks++;
+                        }
+
+                        els.status.textContent = `Fetching weekly data… ${fetchedWeeks} weeks retrieved`;
+
+                        cursor = new Date(weekEnd);
+                        cursor.setDate(cursor.getDate() + 1);
+                    }
+
+                    if (differences.length === 0) {
+                        els.status.className = 'status err';
+                        els.status.textContent =
+                            'No data points retrieved. Check channel/field ID, or that the channel has data in this range.';
+                        clearChart();
+                        return;
+                    }
+
+                    const overflowNote = overflowCount > 0 ? ` (${overflowCount} overflow corrections applied)` : '';
+                    els.status.textContent =
+                        `Done. ${differences.length} weekly differences loaded${failedWeeks ? ` (${failedWeeks} weeks had no data)` : ''}${overflowNote}.`;
+                    renderStats(dates, differences);
+                    renderChart(dates, weekEnds, differences);
+
+                } catch (err) {
+                    els.status.className = 'status err';
+                    els.status.textContent =
+                        `Error: ${err.message}. Note: if this is a CORS error, ThingSpeak's API may need to be accessed from a server context rather than file://.`;
+                } finally {
+                    els.loadBtn.disabled = false;
+                }
+            }
+
+            // ─── stats ─────────────────────────────────────────────────────────
+            function renderStats(dates, differences) {
+                const total = differences.reduce((a, b) => a + b, 0);
+                const avg = total / differences.length;
+                let maxIdx = 0;
+                for (let i = 1; i < differences.length; i++) {
+                    if (Math.abs(differences[i]) > Math.abs(differences[maxIdx])) maxIdx = i;
+                }
+
+                els.statCount.textContent = differences.length;
+                els.statTotal.textContent = `${total >= 0 ? '+' : ''}${total.toFixed(1)} kWh`;
+                els.statAvg.textContent = `${avg >= 0 ? '+' : ''}${avg.toFixed(1)} kWh`;
+                els.statMax.textContent = `${differences[maxIdx] >= 0 ? '+' : ''}${differences[maxIdx].toFixed(1)} kWh`;
+                els.stats.style.display = 'flex';
+            }
+
+            function clearChart() {
+                els.svg.innerHTML = '';
+            }
+
+            // ─── chart ──────────────────────────────────────────────────────────
+            function renderChart(dates, weekEnds, differences) {
+                const svg = els.svg;
+                svg.innerHTML = '';
+
+                const width = els.chartPanel.clientWidth - 32;
+                const height = 420;
+                const margin = { top: 20, right: 16, bottom: 50, left: 56 };
+                const innerW = width - margin.left - margin.right;
+                const innerH = height - margin.top - margin.bottom;
+
+                svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+                svg.setAttribute('width', width);
+                svg.setAttribute('height', height);
+
+                // ── y-axis: 0 … maxAbs ──────────────────────────────────────
+                const maxVal = Math.max(...differences, 0) * 1.15 || 1;
+                const yMin = 0;
+                const yMax = maxVal;
+
+                const n = differences.length;
+                const slot = innerW / n;
+                const barWidth = Math.max(1.5, Math.min(28, slot * 0.7));
+
+                const xScale = (i) => margin.left + i * slot + slot / 2;
+                const yScale = (v) => margin.top + innerH - ((v - yMin) / (yMax - yMin)) * innerH;
+                const zeroY = yScale(0);
+
+                const svgns = 'http://www.w3.org/2000/svg';
+
+                function el(tag, attrs) {
+                    const node = document.createElementNS(svgns, tag);
+                    for (const k in attrs) node.setAttribute(k, attrs[k]);
+                    return node;
+                }
+
+                // ── grid (5 steps from 0 to maxVal) ────────────────────────
+                const steps = 5;
+                for (let s = 0; s <= steps; s++) {
+                    const v = yMin + (s / steps) * (yMax - yMin);
+                    const y = yScale(v);
+                    svg.appendChild(el('line', {
+                        x1: margin.left,
+                        x2: margin.left + innerW,
+                        y1: y,
+                        y2: y,
+                        class: 'grid-line'
+                    }));
+                    const label = el('text', {
+                        x: margin.left - 8,
+                        y: y + 3,
+                        class: 'axis-label',
+                        'text-anchor': 'end'
+                    });
+                    label.textContent = v.toFixed(0);
+                    svg.appendChild(label);
+                }
+
+                // ── zero line (emphasized) ──────────────────────────────────
+                svg.appendChild(el('line', {
+                    x1: margin.left,
+                    x2: margin.left + innerW,
+                    y1: zeroY,
+                    y2: zeroY,
+                    class: 'zero-line'
+                }));
+
+                // ── month labels ─────────────────────────────────────────────
+                let lastMonth = null;
+                for (let i = 0; i < n; i++) {
+                    const d = dates[i];
+                    const m = d.getMonth();
+                    const y = d.getFullYear();
+                    const key = `${y}-${m}`;
+                    if (key !== lastMonth) {
+                        lastMonth = key;
+                        const x = xScale(i);
+                        const label = el('text', {
+                            x: x,
+                            y: height - margin.bottom + 18,
+                            class: 'axis-label',
+                            'text-anchor': 'middle'
+                        });
+                        label.textContent = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+                        svg.appendChild(label);
+                        svg.appendChild(el('line', {
+                            x1: x,
+                            x2: x,
+                            y1: margin.top + innerH,
+                            y2: margin.top + innerH + 4,
+                            class: 'grid-line'
+                        }));
+                    }
+                }
+
+                // ── bars ──────────────────────────────────────────────────────
+                for (let i = 0; i < n; i++) {
+                    const v = differences[i];
+                    const x = xScale(i) - barWidth / 2;
+                    const y = v >= 0 ? yScale(v) : zeroY;
+                    const h = Math.abs(yScale(v) - zeroY);
+                    const color = v >= 0 ? 'var(--green)' : 'var(--red)';
+
+                    const rect = el('rect', {
+                        x: x,
+                        y: y,
+                        width: barWidth,
+                        height: Math.max(h, 1),
+                        fill: color,
+                        class: 'bar',
+                        rx: 1.5
+                    });
+
+                    rect.addEventListener('mouseenter', (e) => showTooltip(e, i));
+                    rect.addEventListener('mousemove', (e) => positionTooltip(e));
+                    rect.addEventListener('mouseleave', hideTooltip);
+                    rect.addEventListener('click', (e) => showTooltip(e, i));
+
+                    svg.appendChild(rect);
+                }
+
+                // ── tooltip helpers ──────────────────────────────────────────
+                function showTooltip(e, i) {
+                    const startStr = dates[i].toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                    });
+                    const endStr = weekEnds[i].toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                    });
+                    const v = differences[i];
+                    const sign = v >= 0 ? '+' : '';
+                    const cls = v >= 0 ? 'pos' : 'neg';
+
+                    els.tooltip.innerHTML = `
+                <div class="range">${startStr} → ${endStr}</div>
+                <div class="delta ${cls}">${sign}${v.toFixed(2)} kWh</div>
+              `;
+                    els.tooltip.style.opacity = '1';
+                    positionTooltip(e);
+                }
+
+                function positionTooltip(e) {
+                    const panelRect = els.chartPanel.getBoundingClientRect();
+                    const x = e.clientX - panelRect.left;
+                    const y = e.clientY - panelRect.top;
+                    els.tooltip.style.left = `${x}px`;
+                    els.tooltip.style.top = `${y - 10}px`;
+                }
+
+                function hideTooltip() {
+                    els.tooltip.style.opacity = '0';
+                }
+            }
+
+            // ─── wire up ──────────────────────────────────────────────────────
+            els.loadBtn.addEventListener('click', loadData);
+            window.addEventListener('resize', () => {});
+
+            // auto-load
+            loadData();
+        })();
+    </script>
+
+</body>
+</html>
