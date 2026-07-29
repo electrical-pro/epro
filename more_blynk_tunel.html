@@ -873,7 +873,7 @@
 <header class="header">
   <div class="header-title">
     <h1>ESP Control Center</h1>
-    <button id="mode-toggle-btn" class="mode-toggle-btn" type="button" title="Switch between mini and full view">FULL</button>
+    <!-- <button id="mode-toggle-btn" class="mode-toggle-btn" type="button" title="Switch between mini and full view">FULL</button> -->
   </div>
   <div class="status-indicator">
     <div class="status-dot" id="conn-dot"></div>
@@ -1995,7 +1995,7 @@ const app = {
     this.blynkToken = token;
     this.apiBase = '';
 
-    this.els.devBanner.textContent = `🔗 BLYNK TUNNEL MODE — viewing telemetry via Blynk's cloud relay (token in URL), not connected to the ESP directly. Controls are not available in this mode.`;
+    this.els.devBanner.textContent = `🔗 BLYNK TUNNEL MODE — No Controls in this mode.`;
     this.els.devBanner.style.display = 'block';
     this.logConn('?token= found in URL - activating Blynk tunnel mode instead of WS/REST');
 
