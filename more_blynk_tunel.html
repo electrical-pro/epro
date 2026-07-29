@@ -1673,137 +1673,6 @@ const CONFIG = {
       icon: '🛰️',
       type: 'new-telemetry',
       miniMode: 3
-    },
-    {
-      id: 'lighting',
-      title: 'Lighting',
-      icon: '💡',
-      type: 'controls',
-      items: [
-        { type: 'slider', endpoint: 'mainLight', stateKey: 'mainLight', icon: '🔆', desc: 'Main light', min: 0, max: 100, unit: '%', miniMode: 1 },
-        { type: 'color', endpoint: 'mainRGB', stateKey: 'mainRGB', icon: '🎨', desc: 'Main RGB Color' },
-        { type: 'slider', endpoint: 'deskLight', stateKey: 'deskLight', icon: '🔆', desc: 'Desk light', min: 0, max: 100, unit: '%', miniMode: 2 },
-        { type: 'choice', endpoint: 'rgbMode', stateKey: 'rgbMode', icon: '🌈', desc: 'RGB Mode', options: [{ v: 'off', l: 'Off' }, { v: 'rain', l: 'Rain' }, { v: 'rand', l: 'Rand' }] },
-        { type: 'toggle', endpoint: 'backUpLightMain', stateKey: 'backUpLightMain', icon: '🏠', desc: 'Big room light' },
-        { type: 'toggle', endpoint: 'backUpLightKitchen', stateKey: 'backUpLightKitchen', icon: '🍳', desc: 'Kitchen light' },
-        { type: 'toggle', endpoint: 'outsideLight', stateKey: 'outsideLight', icon: '🌙', desc: 'Outside light' },
-        { type: 'choice', endpoint: 'chikenLight', stateKey: 'chiknHouse.lightMode', icon: '🐔', desc: 'Chicken light', options: [{ v: 'off', l: 'Off' }, { v: 'on', l: 'On' }, { v: 'auto', l: 'Auto' }] }
-      ]
-    },
-    {
-      id: 'power',
-      title: 'Power & Thermal',
-      icon: '⚡',
-      type: 'controls',
-      items: [
-        { type: 'toggle', endpoint: 'tvOn', stateKey: 'tvOn', icon: '📺', desc: 'LG TV' },
-        { type: 'button', endpoint: 'IR?Blast=20DFA956', icon: '📺', desc: 'LG TV Brightness', buttonText: 'Step' },
-        { type: 'choice', endpoint: 'set_bat_mode', stateKey: 'BMS.batMode', icon: '🔌', desc: 'Charging mode', options: [{ v: 'auto_charging', l: 'Auto' }, { v: 'always_floating', l: 'Float' }] },
-        { type: 'slider', endpoint: 'charge', stateKey: 'BMS.ask_chrg_prc', icon: '🔋', desc: 'Target charge', min: 0, max: 100, unit: '%' },
-        { type: 'slider', endpoint: 'fan', stateKey: 'fanSpeed', icon: '🌀', desc: 'Fan speed', min: 0, max: 100, step: 10, unit: '%' }
-      ]
-    },
-    {
-      id: 'system',
-      title: 'System Settings',
-      icon: '⚙️',
-      type: 'controls',
-      items: [
-        { type: 'toggle', endpoint: 'buzzer', stateKey: 'ESP.sound', icon: '🔊', desc: 'Buzzer sound' },
-        { type: 'toggle', endpoint: 'hb', stateKey: 'heartbeat', icon: '💓', desc: 'HeartBeat detection' },
-        { type: 'toggle', endpoint: 'publicAccess', stateKey: 'ESP.publicAccess', icon: '🌐', desc: 'Public access' },
-        { type: 'toggle', endpoint: 'sendDataToServer', stateKey: 'ESP.sendDataToServer', icon: '📡', desc: 'Server uplink' },
-        { type: 'toggle', endpoint: 'sps30_never_sleep', stateKey: 'envr.SPS30.sps30NeverSleep', icon: '💨', desc: 'SPS30 never sleeps' },
-        { type: 'toggle', endpoint: 'useDelta', stateKey: 'ESP.useDelta', icon: '✂️', desc: 'JSON Delta (Diff Mode)' },
-        { type: 'toggle', endpoint: 'power_save', stateKey: 'ESP.powerSave', icon: '🔋', desc: 'Power saving mode' }
-      ]
-    },
-    {
-      id: 'utilities',
-      title: 'Utilities',
-      icon: '🧰',
-      type: 'links',
-      items: [
-        { url: 'littlefs', desc: 'File Manager (LittleFS)', icon: '📁' },
-        { url: 'env.html', desc: 'Environment Monitor', icon: '🌿' },
-        { url: 'buzzer_test.html', desc: 'Test Buzzer', icon: '🔔' },
-        { url: 'json_view.html', desc: 'JSON Viewer', icon: '🧬' },
-        { url: 'power_monitor.html', desc: 'Power Reference', icon: '⚡' },
-        { url: 'listAP', desc: 'Scan nearby WiFi APs', icon: '🔍' },
-        { url: 'IP_History', desc: 'Connected devices IP list', icon: '🖥️' },
-        { url: 'pressureArray', desc: '1-Hour Pressure', icon: '⏱️' },
-        { action: 'restart', desc: 'Restart ESP Device', icon: '🔄' }
-      ]
-    },
-    {
-      id: 'diagnostics',
-      title: 'Diagnostics',
-      icon: '🛠️',
-      type: 'links',
-      items: [
-        { url: 'I2C_Server?setUpdt=600', desc: 'I2C address search', icon: '🔌' },
-        { url: 'OneWireServer?setUpdt=600', desc: 'OneWire address search', icon: '🔌' },
-        { url: 'ErrorsDS', desc: 'DS18B20 read errors log', icon: '⚠️' },
-        { url: 'info', desc: 'ESP System Information', icon: '⚙️' },
-      ]
-    },
-    {
-      id: 'charts_pwr',
-      title: 'Electrical & System Charts',
-      icon: '🔌',
-      type: 'links',
-      items: [
-        { url: 'Volt_Live.html', desc: 'AC Voltage', icon: '⚡' },
-        { url: 'Power_Live.html', desc: 'Power Consumption', icon: '🔌' },
-        { url: 'Current_Live.html', desc: 'AC Current', icon: '⇋' },
-        { url: 'Frequency_Live.html', desc: 'Frequency', icon: '〰️' },
-        { url: 'PF_Live.html', desc: 'Power Factor', icon: '📐' },
-        { url: 'BMS_Live.html', desc: 'BMS Status', icon: '🔋' },
-        { url: 'FreeHeap_Live.html', desc: 'Free Heap', icon: '🧠' }
-      ]
-    },
-    {
-      id: 'charts_env',
-      title: 'Environment Charts',
-      icon: '🌍',
-      type: 'links',
-      items: [
-        { url: 'CO2_Live.html', desc: 'CO2 Levels', icon: '🌫️' },
-        { url: 'Temp_Live.html', desc: 'Temperature', icon: '🌡️' },
-        { url: 'Humidity_Live.html', desc: 'Humidity', icon: '💧' },
-        { url: 'Pressure_Live.html', desc: 'Atmospheric Pressure', icon: '⏱️' },
-        { url: 'Errors_Live.html', desc: 'DS18B20 Errors', icon: '⚠️' },
-        { url: 'Errors_LongTime.html', desc: 'DS18B20 Error History', icon: '📉' },
-        { url: 'TestProbe_Live.html', desc: 'DS18B20 Test Probe', icon: '🌡️' }
-      ]
-    },
-    {
-      id: 'html_data',
-      title: 'SmartData Pages',
-      icon: '📝',
-      type: 'table',
-      items: [
-        { url: '', desc: 'Root' },
-        { url: 'control_WS_css_V2_7.html', desc: 'Legacy WS (default)' },
-        { url: 'ctrl_non_ws.html?update=500', desc: 'Non-WebSocket UI Deflate' },
-        { url: 'control_WS_css_V2_7_Deflate.html?update=500', desc: 'WebSocket UI Deflate' },
-        { url: 'smartData', desc: 'Get SmartData HTML' },
-        { url: 'smartDataCompressed', desc: 'Compressed SmartData HTML' },
-        { url: 'testDisplays', desc: 'Test 7 seg displays' },
-      ]
-    },
-    {
-      id: 'raw_data',
-      title: 'Endpoints',
-      icon: '🗄️',
-      type: 'table',
-      items: [
-        { url: 'mainLight?set=100', desc: 'API: Set Main Light (0-100)' },
-        { url: 'IR?Blast=20DF906F', desc: 'API: Transmit IR Code' },
-        { url: 'bms_raw', desc: 'API: Get RAW HEX from BMS' },
-        { url: 'Feed_JSON', desc: 'API: Main JSON endpoint' },
-        { url: 'https://electrical-pro.github.io/epro/berezan.html', desc: "Berezan' Weather" }
-      ]
     }
   ]
 };
@@ -2065,7 +1934,7 @@ const app = {
 
   init() {
     this.renderLayout();
-    this.initMiniMode();
+    //this.initMiniMode();
 
     const blynkToken = new URLSearchParams(window.location.search).get('token');
     if (blynkToken) {
