@@ -144,7 +144,10 @@
   const dweetThing = (name) => `${APP_NS}-${name}`;
 
   const iceServers = {
-    iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun.cloudflare.com:3478" }
+    ]
   };
 
   const updateStatus = (text) => { 
@@ -202,7 +205,30 @@
     dataChannel.onmessage = (event) => addMsg(event.data, "them");
   };
 
-  const waitForIceComplete = async () => {
+  // Poll immediately, then on a short interval, instead of waiting a full
+  // tick before the first check -- cuts several seconds off worst-case delay.
+  const pollUntil = async (thing, predicate, intervalMs = 600) => {
+    while (true) {
+      const content = await getLatest(thing);
+      if (content && predicate(content)) return content;
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+  };
+
+  // If ICE hasn't connected within a few seconds, nudge it with a restart
+  // instead of waiting indefinitely on a stalled attempt.
+  const armIceWatchdog = () => {
+    let settled = false;
+    pc.addEventListener("iceconnectionstatechange", () => {
+      if (["connected", "completed"].includes(pc.iceConnectionState)) settled = true;
+    });
+    setTimeout(() => {
+      if (!settled && ["checking", "disconnected", "new"].includes(pc.iceConnectionState)) {
+        updateStatus("Connection slow, retrying...");
+        pc.restartIce();
+      }
+    }, 8000);
+  };
     return new Promise(resolve => {
       if (pc.iceGatheringState === "complete") return resolve();
       pc.onicegatheringstatechange = () => {
@@ -252,16 +278,14 @@
     const hostTimestamp = Date.now();
     await dweetFor(dweetThing(`${roomName}-offer`), { sdp: pc.localDescription.sdp, ts: hostTimestamp });
     updateStatus("Room created! Copy and send the link above to your friend.");
+    armIceWatchdog();
 
-    // Poll for answer
-    const interval = setInterval(async () => {
-      const content = await getLatest(dweetThing(`${roomName}-answer`));
-      if (content && content.sdp && content.ts >= hostTimestamp) {
-        clearInterval(interval);
-        updateStatus("Answer received, establishing direct connection...");
-        await pc.setRemoteDescription(new RTCSessionDescription({ type: "answer", sdp: content.sdp }));
-      }
-    }, 2000);
+    const content = await pollUntil(
+      dweetThing(`${roomName}-answer`),
+      (c) => c.sdp && c.ts >= hostTimestamp
+    );
+    updateStatus("Answer received, establishing direct connection...");
+    await pc.setRemoteDescription(new RTCSessionDescription({ type: "answer", sdp: content.sdp }));
   }
 
   // --- JOIN FLOW ---
@@ -277,24 +301,22 @@
       setupDataChannel();
     };
 
-    let offerContent = null;
-    const interval = setInterval(async () => {
-      offerContent = await getLatest(dweetThing(`${roomName}-offer`));
-      if (offerContent && offerContent.sdp) {
-        clearInterval(interval);
-        updateStatus("Host found! Generating answer...");
-        
-        await pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp: offerContent.sdp }));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        
-        updateStatus("Gathering network candidates...");
-        await waitForIceComplete();
+    const offerContent = await pollUntil(
+      dweetThing(`${roomName}-offer`),
+      (c) => !!c.sdp
+    );
+    updateStatus("Host found! Generating answer...");
 
-        await dweetFor(dweetThing(`${roomName}-answer`), { sdp: pc.localDescription.sdp, ts: Date.now() });
-        updateStatus("Answer sent. Establishing direct connection...");
-      }
-    }, 2000);
+    await pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp: offerContent.sdp }));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+
+    updateStatus("Gathering network candidates...");
+    await waitForIceComplete();
+
+    await dweetFor(dweetThing(`${roomName}-answer`), { sdp: pc.localDescription.sdp, ts: Date.now() });
+    updateStatus("Answer sent. Establishing direct connection...");
+    armIceWatchdog();
   }
 
   // --- MESSAGING ---
