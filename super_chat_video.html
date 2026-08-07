@@ -290,12 +290,21 @@
       }
     }, 8000);
   };
-  const waitForIceComplete = async () => {
-    return new Promise(resolve => {
-      if (pc.iceGatheringState === "complete") return resolve();
-      pc.onicegatheringstatechange = () => {
-        if (pc.iceGatheringState === "complete") resolve();
+  const waitForIceComplete = async (maxWaitMs = 4000) => {
+    if (pc.iceGatheringState === "complete") return;
+    await new Promise((resolve) => {
+      const done = () => {
+        pc.removeEventListener("icegatheringstatechange", onChange);
+        resolve();
       };
+      const onChange = () => {
+        if (pc.iceGatheringState === "complete") done();
+      };
+      pc.addEventListener("icegatheringstatechange", onChange);
+      // Don't wait out slow/dead virtual interfaces (VPNs, WSL, Docker, etc)
+      // -- the useful candidates (LAN host + srflx) typically arrive within
+      // a second or two; proceed with whatever we have after the timeout.
+      setTimeout(done, maxWaitMs);
     });
   };
 
