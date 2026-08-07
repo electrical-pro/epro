@@ -210,7 +210,11 @@
       }
     };
     pc.ontrack = (event) => {
-      console.log(`ontrack fired: kind=${event.track.kind}, id=${event.track.id}, streams=${event.streams.length}`);
+      const track = event.track;
+      console.log(`ontrack fired: kind=${track.kind}, id=${track.id}, muted=${track.muted}, streams=${event.streams.length}`);
+      track.onunmute = () => console.log(`Track UNMUTED (media flowing now): kind=${track.kind}`);
+      track.onmute = () => console.log(`Track MUTED (media stopped): kind=${track.kind}`);
+
       document.getElementById("videoRow").classList.remove("hidden");
       const remoteVideo = document.getElementById("remoteVideo");
       remoteVideo.classList.remove("hidden");
@@ -292,6 +296,12 @@
       }
     }, 8000);
   };
+  const logTransceivers = (label) => {
+    pc.getTransceivers().forEach((t) => {
+      console.log(`[${label}] mid=${t.mid} kind=${t.receiver.track?.kind} direction=${t.direction} currentDirection=${t.currentDirection}`);
+    });
+  };
+
   const waitForIceComplete = async (maxWaitMs = 4000) => {
     if (pc.iceGatheringState === "complete") return;
     await new Promise((resolve) => {
@@ -363,6 +373,7 @@
     );
     updateStatus("Answer received, establishing direct connection...");
     await pc.setRemoteDescription(new RTCSessionDescription({ type: "answer", sdp: content.sdp }));
+    logTransceivers("HOST after answer");
   }
 
   // --- JOIN FLOW ---
@@ -392,6 +403,7 @@
     await setupMediaIfEnabled();
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
+    logTransceivers("JOINER after answer created");
 
     updateStatus("Gathering network candidates...");
     await waitForIceComplete();
