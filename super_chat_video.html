@@ -146,9 +146,6 @@
   let dataChannel;
   let roomName = "";
 
-  // Hidden namespace so a common room name like "test" can't collide with
-  // some unrelated stranger's dweet.cc "test-offer". Not shown to the user
-  // anywhere -- just silently prefixed onto every dweet "thing" name.
   const APP_NS = "qk7x2v9p";
   const dweetThing = (name) => `${APP_NS}-${name}`;
 
@@ -202,13 +199,15 @@
 
   let audioTransceiver, videoTransceiver;
 
-  const setupPeerConnection = () => {
+  const setupPeerConnection = (isHost = false) => {
     pc = new RTCPeerConnection(iceServers);
+    
     pc.oniceconnectionstatechange = () => {
       if (pc.iceConnectionState === "disconnected" || pc.iceConnectionState === "failed") {
         addMsg("Peer disconnected. The connection was lost.", "sys");
       }
     };
+    
     pc.ontrack = (event) => {
       const track = event.track;
       console.log(`ontrack fired: kind=${track.kind}, id=${track.id}, muted=${track.muted}, streams=${event.streams.length}`);
@@ -218,26 +217,24 @@
       document.getElementById("videoRow").classList.remove("hidden");
       const remoteVideo = document.getElementById("remoteVideo");
       remoteVideo.classList.remove("hidden");
-      if (remoteVideo.srcObject !== event.streams[0]) {
-        remoteVideo.srcObject = event.streams[0];
-        remoteVideo.play().catch((e) => console.error("remoteVideo play() failed:", e));
+      
+      // Construct a MediaStream if event.streams is empty
+      if (!remoteVideo.srcObject) {
+        remoteVideo.srcObject = new MediaStream();
       }
+      remoteVideo.srcObject.addTrack(track);
+
+      // Suppress harmless AbortError caused by rapid track firing
+      remoteVideo.play().catch(() => {});
     };
 
-    // Pre-create transceivers in a FIXED order (audio, then video) on both
-    // host and joiner, always -- regardless of whether either side actually
-    // has a camera. This guarantees the offer and answer always agree on
-    // m-line order/count. A side with no camera just stays "recvonly",
-    // which also means it can still receive the other side's video even
-    // without sending its own.
-    audioTransceiver = pc.addTransceiver("audio", { direction: "recvonly" });
-    videoTransceiver = pc.addTransceiver("video", { direction: "recvonly" });
+    // Pre-create transceivers only on the Host side
+    if (isHost) {
+      audioTransceiver = pc.addTransceiver("audio", { direction: "recvonly" });
+      videoTransceiver = pc.addTransceiver("video", { direction: "recvonly" });
+    }
   };
 
-  // Grabs camera/mic (if the checkbox is on) and attaches tracks to the
-  // ALREADY-EXISTING transceivers via replaceTrack, upgrading them to
-  // sendrecv -- never creates new transceivers, so m-line order/count
-  // set up in setupPeerConnection is never disturbed.
   const setupMediaIfEnabled = async () => {
     if (!document.getElementById("enableVideo").checked) return;
     try {
@@ -249,11 +246,12 @@
 
       const audioTrack = stream.getAudioTracks()[0];
       const videoTrack = stream.getVideoTracks()[0];
-      if (audioTrack) {
+      
+      if (audioTrack && audioTransceiver) {
         await audioTransceiver.sender.replaceTrack(audioTrack);
         audioTransceiver.direction = "sendrecv";
       }
-      if (videoTrack) {
+      if (videoTrack && videoTransceiver) {
         await videoTransceiver.sender.replaceTrack(videoTrack);
         videoTransceiver.direction = "sendrecv";
       }
@@ -272,8 +270,6 @@
     dataChannel.onmessage = (event) => addMsg(event.data, "them");
   };
 
-  // Poll immediately, then on a short interval, instead of waiting a full
-  // tick before the first check -- cuts several seconds off worst-case delay.
   const pollUntil = async (thing, predicate, intervalMs = 600) => {
     while (true) {
       const content = await getLatest(thing);
@@ -282,8 +278,6 @@
     }
   };
 
-  // If ICE hasn't connected within a few seconds, nudge it with a restart
-  // instead of waiting indefinitely on a stalled attempt.
   const armIceWatchdog = () => {
     let settled = false;
     pc.addEventListener("iceconnectionstatechange", () => {
@@ -296,6 +290,7 @@
       }
     }, 8000);
   };
+  
   const logTransceivers = (label) => {
     pc.getTransceivers().forEach((t) => {
       console.log(`[${label}] mid=${t.mid} kind=${t.receiver.track?.kind} direction=${t.direction} currentDirection=${t.currentDirection}`);
@@ -313,9 +308,6 @@
         if (pc.iceGatheringState === "complete") done();
       };
       pc.addEventListener("icegatheringstatechange", onChange);
-      // Don't wait out slow/dead virtual interfaces (VPNs, WSL, Docker, etc)
-      // -- the useful candidates (LAN host + srflx) typically arrive within
-      // a second or two; proceed with whatever we have after the timeout.
       setTimeout(done, maxWaitMs);
     });
   };
@@ -331,7 +323,6 @@
   async function hostChat() {
     let baseRoom = document.getElementById("roomName").value.trim() || "super-secret-chat-992";
     
-    // Check if the input already contains a suffix (e.g. pasted directly), otherwise generate one
     if (!baseRoom.includes("-")) {
       roomName = `${baseRoom}-${getRandomSuffix()}`;
     } else {
@@ -340,7 +331,6 @@
     
     document.getElementById("roomName").value = roomName;
 
-    // Build the shareable link with query parameter
     const url = new URL(window.location.href);
     url.searchParams.set("room", roomName);
     if (document.getElementById("enableVideo").checked) {
@@ -350,7 +340,7 @@
     document.getElementById("shareContainer").classList.remove("hidden");
 
     updateStatus("Generating offer...");
-    setupPeerConnection();
+    setupPeerConnection(true); // Flag as Host
     await setupMediaIfEnabled();
 
     dataChannel = pc.createDataChannel("chat");
@@ -382,7 +372,7 @@
     if (!roomName) return alert("Please enter or paste a room name.");
 
     updateStatus("Searching for host...");
-    setupPeerConnection();
+    setupPeerConnection(false); // Flag as Joiner
 
     pc.ondatachannel = (event) => {
       dataChannel = event.channel;
@@ -397,9 +387,11 @@
 
     await pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp: offerContent.sdp }));
 
-    // Local media is attached via replaceTrack on the transceivers created
-    // in setupPeerConnection -- order relative to setRemoteDescription no
-    // longer matters since no new transceivers get created here.
+    // Bind to the transceivers created by the remote offer
+    const transceivers = pc.getTransceivers();
+    audioTransceiver = transceivers.find(t => t.receiver.track?.kind === "audio");
+    videoTransceiver = transceivers.find(t => t.receiver.track?.kind === "video");
+
     await setupMediaIfEnabled();
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
@@ -436,9 +428,6 @@
       document.getElementById("hostBtn").classList.add("hidden");
 
       if (videoParam) {
-        // The link already encodes "this is a video call" -- the browser's
-        // own camera permission dialog is the real consent step, so join
-        // immediately instead of making them click through first.
         document.getElementById("enableVideo").checked = true;
         document.getElementById("joinBtn").classList.add("hidden");
         updateStatus(`Video call invite for room "${roomParam}". Requesting camera & joining...`);
