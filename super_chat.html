@@ -137,6 +137,12 @@
   let dataChannel;
   let roomName = "";
 
+  // Hidden namespace so a common room name like "test" can't collide with
+  // some unrelated stranger's dweet.cc "test-offer". Not shown to the user
+  // anywhere -- just silently prefixed onto every dweet "thing" name.
+  const APP_NS = "qk7x2v9p";
+  const dweetThing = (name) => `${APP_NS}-${name}`;
+
   const iceServers = {
     iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
   };
@@ -244,12 +250,12 @@
     await waitForIceComplete();
 
     const hostTimestamp = Date.now();
-    await dweetFor(`${roomName}-offer`, { sdp: pc.localDescription.sdp, ts: hostTimestamp });
+    await dweetFor(dweetThing(`${roomName}-offer`), { sdp: pc.localDescription.sdp, ts: hostTimestamp });
     updateStatus("Room created! Copy and send the link above to your friend.");
 
     // Poll for answer
     const interval = setInterval(async () => {
-      const content = await getLatest(`${roomName}-answer`);
+      const content = await getLatest(dweetThing(`${roomName}-answer`));
       if (content && content.sdp && content.ts >= hostTimestamp) {
         clearInterval(interval);
         updateStatus("Answer received, establishing direct connection...");
@@ -273,7 +279,7 @@
 
     let offerContent = null;
     const interval = setInterval(async () => {
-      offerContent = await getLatest(`${roomName}-offer`);
+      offerContent = await getLatest(dweetThing(`${roomName}-offer`));
       if (offerContent && offerContent.sdp) {
         clearInterval(interval);
         updateStatus("Host found! Generating answer...");
@@ -285,7 +291,7 @@
         updateStatus("Gathering network candidates...");
         await waitForIceComplete();
 
-        await dweetFor(`${roomName}-answer`, { sdp: pc.localDescription.sdp, ts: Date.now() });
+        await dweetFor(dweetThing(`${roomName}-answer`), { sdp: pc.localDescription.sdp, ts: Date.now() });
         updateStatus("Answer sent. Establishing direct connection...");
       }
     }, 2000);
@@ -309,6 +315,9 @@
 
     if (roomParam) {
       document.getElementById("roomName").value = roomParam;
+      document.getElementById("roomName").disabled = true;
+      document.getElementById("hostBtn").classList.add("hidden");
+      document.getElementById("joinBtn").classList.add("hidden");
       updateStatus(`Invite link detected for room "${roomParam}". Auto-joining...`);
       joinChat();
     }
