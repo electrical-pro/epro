@@ -512,15 +512,32 @@
     myPc.ontrack = (event) => {
       if (pc !== myPc) return;
       const track = event.track;
-      document.getElementById("videoRow").classList.remove("hidden");
       const remoteVideo = document.getElementById("remoteVideo");
-      remoteVideo.classList.remove("hidden");
-
-      if (!remoteVideo.srcObject) {
-        remoteVideo.srcObject = new MediaStream();
-      }
+      if (!remoteVideo.srcObject) remoteVideo.srcObject = new MediaStream();
       remoteVideo.srcObject.addTrack(track);
-      remoteVideo.play().catch(() => {});
+
+      if (track.kind !== "video") return; // audio just rides along silently, no box to show
+
+      // A transceiver exists (and ontrack fires) the moment the connection
+      // is negotiated, whether or not the other side's camera is actually
+      // on -- that's what caused the empty black box before. The track's
+      // own mute/unmute events reflect whether real frames are flowing,
+      // so use those to decide when to actually show anything.
+      const onUnmute = () => {
+        if (pc !== myPc) return;
+        remoteVideo.classList.remove("hidden");
+        updateVideoRowVisibility();
+        remoteVideo.play().catch(() => {});
+        if (!videoEnabled) startLocalVideo(); // mirror: they started video, so do we
+      };
+      const onMute = () => {
+        if (pc !== myPc) return;
+        remoteVideo.classList.add("hidden");
+        updateVideoRowVisibility();
+      };
+      track.addEventListener("unmute", onUnmute);
+      track.addEventListener("mute", onMute);
+      if (!track.muted) onUnmute();
     };
 
     if (isHost) {
@@ -542,11 +559,19 @@
     else establishJoinConnection();
   }
 
+  function updateVideoRowVisibility() {
+    const row = document.getElementById("videoRow");
+    const lv = document.getElementById("localVideo");
+    const rv = document.getElementById("remoteVideo");
+    const anyVisible = !lv.classList.contains("hidden") || !rv.classList.contains("hidden");
+    row.classList.toggle("hidden", !anyVisible);
+  }
+
   function resetRemoteVideo() {
     const rv = document.getElementById("remoteVideo");
     rv.srcObject = null;
     rv.classList.add("hidden");
-    if (!videoEnabled) document.getElementById("videoRow").classList.add("hidden");
+    updateVideoRowVisibility();
   }
 
   async function attachLocalMediaTracks() {
@@ -558,7 +583,7 @@
     const localVideo = document.getElementById("localVideo");
     localVideo.srcObject = localStream;
     localVideo.classList.remove("hidden");
-    document.getElementById("videoRow").classList.remove("hidden");
+    updateVideoRowVisibility();
   }
 
   const waitForIceComplete = (targetPc, maxWaitMs = 4000) => {
@@ -753,33 +778,52 @@
   // setupPeerConnection), so turning this on is just grabbing a stream
   // and attaching it to the existing transceivers -- no renegotiation,
   // and the browser only prompts for camera/mic permission once.
+  //
+  // Starting your video also mirror-starts the other side's (see the
+  // ontrack unmute handler above) so a call feels like a call, not
+  // something both people have to separately opt into.
   // ---------------------------------------------------------------------
-  async function toggleVideo() {
-    if (videoEnabled) {
-      if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-      if (audioTransceiver) { try { await audioTransceiver.sender.replaceTrack(null); } catch (e) {} }
-      if (videoTransceiver) { try { await videoTransceiver.sender.replaceTrack(null); } catch (e) {} }
-      document.getElementById("localVideo").srcObject = null;
-      document.getElementById("localVideo").classList.add("hidden");
-      videoEnabled = false;
-      updateVideoBtn();
-      return;
-    }
+  let videoStarting = false;
 
-    if (!pc || pc.connectionState !== "connected") {
-      addMsg("Video needs an active direct P2P connection -- still working on that.", "sys");
-      return;
-    }
-
+  async function startLocalVideo() {
+    if (videoEnabled || videoStarting) return;
+    if (!pc || pc.connectionState !== "connected") return;
+    videoStarting = true;
     try {
       localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     } catch (e) {
       addMsg("Camera/mic access was denied or unavailable.", "sys");
+      videoStarting = false;
       return;
     }
     videoEnabled = true;
+    videoStarting = false;
     await attachLocalMediaTracks();
     updateVideoBtn();
+  }
+
+  async function stopLocalVideo() {
+    if (!videoEnabled) return;
+    if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+    if (audioTransceiver) { try { await audioTransceiver.sender.replaceTrack(null); } catch (e) {} }
+    if (videoTransceiver) { try { await videoTransceiver.sender.replaceTrack(null); } catch (e) {} }
+    document.getElementById("localVideo").srcObject = null;
+    document.getElementById("localVideo").classList.add("hidden");
+    videoEnabled = false;
+    updateVideoBtn();
+    updateVideoRowVisibility();
+  }
+
+  async function toggleVideo() {
+    if (videoEnabled) {
+      await stopLocalVideo();
+      return;
+    }
+    if (!pc || pc.connectionState !== "connected") {
+      addMsg("Video needs an active direct P2P connection -- still working on that.", "sys");
+      return;
+    }
+    await startLocalVideo();
   }
 
   // ---------------------------------------------------------------------
