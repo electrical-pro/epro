@@ -354,3 +354,186 @@
     
     document.getElementById("shareUrl").value = url.toString();
     document.getElementById("shareContainer").classList.remove("hidden");
+
+    updateStatus("Generating offer...");
+    setupPeerConnection(true);
+    await setupMediaIfEnabled();
+
+    dataChannel = pc.createDataChannel("chat");
+    setupDataChannel();
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    
+    updateStatus("Gathering network candidates...");
+    await waitForIceComplete();
+
+    const hostTimestamp = Date.now();
+    await dweetFor(dweetThing(`${roomName}-offer`), { sdp: pc.localDescription.sdp, ts: hostTimestamp });
+    updateStatus("Room created! Copy and send the link above to your friend.");
+
+    const content = await pollUntil(
+      dweetThing(`${roomName}-answer`),
+      (c) => c.sdp && c.ts >= hostTimestamp
+    );
+    updateStatus("Answer received, establishing connection...");
+    await pc.setRemoteDescription(new RTCSessionDescription({ type: "answer", sdp: content.sdp }));
+  }
+
+  async function joinChat() {
+    roomName = document.getElementById("roomName").value.trim();
+    if (!roomName) return alert("Please enter or paste a room name.");
+
+    updateStatus("Searching for host...");
+    setupPeerConnection(false);
+
+    pc.ondatachannel = (event) => {
+      dataChannel = event.channel;
+      setupDataChannel();
+    };
+
+    const offerContent = await pollUntil(dweetThing(`${roomName}-offer`), (c) => !!c.sdp);
+    updateStatus("Host found! Generating answer...");
+
+    await pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp: offerContent.sdp }));
+
+    const transceivers = pc.getTransceivers();
+    audioTransceiver = transceivers.find(t => t.receiver.track?.kind === "audio");
+    videoTransceiver = transceivers.find(t => t.receiver.track?.kind === "video");
+
+    await setupMediaIfEnabled();
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+
+    updateStatus("Gathering network candidates...");
+    await waitForIceComplete();
+
+    await dweetFor(dweetThing(`${roomName}-answer`), { sdp: pc.localDescription.sdp, ts: Date.now() });
+    updateStatus("Answer sent. Establishing direct connection...");
+  }
+
+  function sendMsg() {
+    const input = document.getElementById("msgInput");
+    const val = input.value.trim();
+    if (val && dataChannel && dataChannel.readyState === "open") {
+      const escapedVal = val.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      dataChannel.send(escapedVal);
+      addMsg(escapedVal, "me");
+      input.value = "";
+    }
+  }
+  
+  const chatUI = document.getElementById("chatUI");
+  
+  chatUI.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    chatUI.classList.add("dragover");
+  });
+  
+  chatUI.addEventListener("dragleave", (e) => {
+    e.preventDefault();
+    chatUI.classList.remove("dragover");
+  });
+  
+  chatUI.addEventListener("drop", (e) => {
+    e.preventDefault();
+    chatUI.classList.remove("dragover");
+    
+    if (e.dataTransfer.files.length > 0) {
+      if (dataChannel && dataChannel.readyState === "open") {
+        offerFile(e.dataTransfer.files[0]);
+      } else {
+        alert("You must be connected to someone to send a file.");
+      }
+    }
+  });
+
+  function offerFile(file) {
+    pendingFile = file;
+    const msg = {
+      type: "file-offer",
+      name: file.name,
+      size: file.size
+    };
+    dataChannel.send(JSON.stringify(msg));
+    addMsg(`<em>Offered file: ${file.name} (${formatBytes(file.size)}). Waiting for them to accept...</em>`, "me");
+  }
+
+  window.acceptFileTransfer = function() {
+    dataChannel.send(JSON.stringify({ type: "file-accept" }));
+    addMsg(`<em>Downloading ${incomingFileInfo.name}...</em>`, "me");
+  };
+
+  function startFileTransfer() {
+    if (!pendingFile) return;
+    
+    const CHUNK_SIZE = 16384; 
+    let offset = 0;
+    
+    addMsg(`<em>Uploading ${pendingFile.name}...</em>`, "sys");
+
+    const readSlice = (o) => {
+      const slice = pendingFile.slice(offset, o + CHUNK_SIZE);
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        if (dataChannel.readyState !== "open") return;
+        
+        dataChannel.send(e.target.result); 
+        offset += CHUNK_SIZE;
+        
+        if (offset < pendingFile.size) {
+          setTimeout(() => readSlice(offset), 0); 
+        } else {
+          dataChannel.send(JSON.stringify({ type: "file-done" }));
+          addMsg(`<em>Upload complete: ${pendingFile.name}</em>`, "sys");
+          pendingFile = null;
+        }
+      };
+      reader.readAsArrayBuffer(slice);
+    };
+    
+    readSlice(0);
+  }
+
+  function finishFileReceive() {
+    const blob = new Blob(incomingFileData);
+    const url = URL.createObjectURL(blob);
+    
+    const fileHtml = `
+      <strong>File Received!</strong><br>
+      <a href="${url}" download="${incomingFileInfo.name}" style="color: blue; font-weight: bold; text-decoration: underline; display: inline-block; margin-top: 5px;">
+        Save ${incomingFileInfo.name}
+      </a>
+    `;
+    addMsg(fileHtml, "them");
+    addMsg(`<em>Download complete: ${incomingFileInfo.name}</em>`, "sys");
+    
+    incomingFileInfo = null;
+    incomingFileData = [];
+  }
+
+  window.addEventListener("DOMContentLoaded", () => {
+    const params = new URLSearchParams(window.location.search);
+    const roomParam = params.get("room");
+    const videoParam = params.get("video") === "true";
+
+    if (roomParam) {
+      document.getElementById("roomName").value = roomParam;
+      document.getElementById("roomName").disabled = true;
+      document.getElementById("hostBtn").classList.add("hidden");
+
+      if (videoParam) {
+        document.getElementById("enableVideo").checked = true;
+        document.getElementById("joinBtn").classList.add("hidden");
+        updateStatus(`Video call invite for room "${roomParam}". Requesting camera & joining...`);
+        joinChat();
+      } else {
+        updateStatus(`Invite link detected for room "${roomParam}". Enable video if you want it, then click Join.`);
+      }
+    }
+  });
+</script>
+
+</body>
+</html>
