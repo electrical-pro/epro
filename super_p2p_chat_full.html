@@ -57,7 +57,6 @@
     transition: background 0.3s;
   }
   
-  /* Drag & drop visual feedback */
   #chatUI.dragover {
     background: #e6f2ff;
     border: 2px dashed #007bff;
@@ -171,12 +170,11 @@
     const box = document.getElementById("chatBox");
     const div = document.createElement("div");
     div.className = "msg " + type;
-    div.innerHTML = text; // Changed to innerHTML to allow buttons/links
+    div.innerHTML = text; 
     box.appendChild(div);
     box.scrollTop = box.scrollHeight;
   };
 
-  // Utility to format file size
   function formatBytes(bytes) {
     if (bytes === 0) return '0 Bytes';
     const k = 1024, sizes = ['Bytes', 'KB', 'MB', 'GB'];
@@ -237,8 +235,10 @@
     };
 
     if (isHost) {
-      audioTransceiver = pc.addTransceiver("audio", { direction: "recvonly" });
-      videoTransceiver = pc.addTransceiver("video", { direction: "recvonly" });
+      // FIX: Defaulting to bi-directional pipes prevents the 'Incompatible send direction' 
+      // crash when the Host starts with media off but the Joiner starts with it on.
+      audioTransceiver = pc.addTransceiver("audio", { direction: "sendrecv" });
+      videoTransceiver = pc.addTransceiver("video", { direction: "sendrecv" });
     }
   };
 
@@ -267,13 +267,11 @@
     }
   };
 
-  // --- FILE TRANSFER STATE ---
-  let pendingFile = null;       // File waiting to be sent
-  let incomingFileInfo = null;  // Metadata of file being received
-  let incomingFileData = [];    // Array of received ArrayBuffers
+  let pendingFile = null;       
+  let incomingFileInfo = null;  
+  let incomingFileData = [];    
 
   const setupDataChannel = () => {
-    // IMPORTANT: Set binaryType so chunks arrive as ArrayBuffers, not Blobs
     dataChannel.binaryType = "arraybuffer";
 
     dataChannel.onopen = () => {
@@ -283,19 +281,17 @@
     };
 
     dataChannel.onmessage = (event) => {
-      // 1. Handle Binary Data (File Chunks)
       if (event.data instanceof ArrayBuffer) {
         incomingFileData.push(event.data);
         return;
       }
 
-      // 2. Handle Text Data (Chat messages or JSON File Signaling)
       try {
         const msg = JSON.parse(event.data);
         
         if (msg.type === "file-offer") {
           incomingFileInfo = msg;
-          incomingFileData = []; // Reset buffer
+          incomingFileData = []; 
           const fileHtml = `
             <strong>File Offered:</strong> ${msg.name} (${formatBytes(msg.size)})<br>
             <button onclick="acceptFileTransfer()" style="margin-top:8px; padding: 6px 12px; font-size: 13px; background: #28a745;">Download File</button>
@@ -309,10 +305,9 @@
           finishFileReceive();
         } 
         else {
-          addMsg(event.data, "them"); // Fallback for weird JSON
+          addMsg(event.data, "them");
         }
       } catch (e) {
-        // Not JSON, just a standard chat message
         addMsg(event.data, "them");
       }
     };
@@ -348,7 +343,6 @@
     updateStatus("Link copied to clipboard! Send it to your friend.");
   }
 
-  // --- HOST FLOW ---
   async function hostChat() {
     let baseRoom = document.getElementById("roomName").value.trim() || "super-secret-chat-992";
     roomName = baseRoom.includes("-") ? baseRoom : `${baseRoom}-${getRandomSuffix()}`;
@@ -360,199 +354,3 @@
     
     document.getElementById("shareUrl").value = url.toString();
     document.getElementById("shareContainer").classList.remove("hidden");
-
-    updateStatus("Generating offer...");
-    setupPeerConnection(true);
-    await setupMediaIfEnabled();
-
-    dataChannel = pc.createDataChannel("chat");
-    setupDataChannel();
-
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    
-    updateStatus("Gathering network candidates...");
-    await waitForIceComplete();
-
-    const hostTimestamp = Date.now();
-    await dweetFor(dweetThing(`${roomName}-offer`), { sdp: pc.localDescription.sdp, ts: hostTimestamp });
-    updateStatus("Room created! Copy and send the link above to your friend.");
-
-    const content = await pollUntil(
-      dweetThing(`${roomName}-answer`),
-      (c) => c.sdp && c.ts >= hostTimestamp
-    );
-    updateStatus("Answer received, establishing connection...");
-    await pc.setRemoteDescription(new RTCSessionDescription({ type: "answer", sdp: content.sdp }));
-  }
-
-  // --- JOIN FLOW ---
-  async function joinChat() {
-    roomName = document.getElementById("roomName").value.trim();
-    if (!roomName) return alert("Please enter or paste a room name.");
-
-    updateStatus("Searching for host...");
-    setupPeerConnection(false);
-
-    pc.ondatachannel = (event) => {
-      dataChannel = event.channel;
-      setupDataChannel();
-    };
-
-    const offerContent = await pollUntil(dweetThing(`${roomName}-offer`), (c) => !!c.sdp);
-    updateStatus("Host found! Generating answer...");
-
-    await pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp: offerContent.sdp }));
-
-    const transceivers = pc.getTransceivers();
-    audioTransceiver = transceivers.find(t => t.receiver.track?.kind === "audio");
-    videoTransceiver = transceivers.find(t => t.receiver.track?.kind === "video");
-
-    await setupMediaIfEnabled();
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-
-    updateStatus("Gathering network candidates...");
-    await waitForIceComplete();
-
-    await dweetFor(dweetThing(`${roomName}-answer`), { sdp: pc.localDescription.sdp, ts: Date.now() });
-    updateStatus("Answer sent. Establishing direct connection...");
-  }
-
-  // --- STANDARD MESSAGING ---
-  function sendMsg() {
-    const input = document.getElementById("msgInput");
-    const val = input.value.trim();
-    if (val && dataChannel && dataChannel.readyState === "open") {
-      // Escape HTML to prevent injection since we switched to innerHTML for buttons
-      const escapedVal = val.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      dataChannel.send(escapedVal);
-      addMsg(escapedVal, "me");
-      input.value = "";
-    }
-  }
-
-  // --- FILE TRANSFER LOGIC ---
-  
-  // 1. Setup Drag & Drop UI
-  const chatUI = document.getElementById("chatUI");
-  
-  chatUI.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    chatUI.classList.add("dragover");
-  });
-  
-  chatUI.addEventListener("dragleave", (e) => {
-    e.preventDefault();
-    chatUI.classList.remove("dragover");
-  });
-  
-  chatUI.addEventListener("drop", (e) => {
-    e.preventDefault();
-    chatUI.classList.remove("dragover");
-    
-    if (e.dataTransfer.files.length > 0) {
-      if (dataChannel && dataChannel.readyState === "open") {
-        offerFile(e.dataTransfer.files[0]);
-      } else {
-        alert("You must be connected to someone to send a file.");
-      }
-    }
-  });
-
-  // 2. Sender offers the file metadata
-  function offerFile(file) {
-    pendingFile = file;
-    const msg = {
-      type: "file-offer",
-      name: file.name,
-      size: file.size
-    };
-    dataChannel.send(JSON.stringify(msg));
-    addMsg(`<em>Offered file: ${file.name} (${formatBytes(file.size)}). Waiting for them to accept...</em>`, "me");
-  }
-
-  // 3. Receiver accepts the file
-  window.acceptFileTransfer = function() {
-    dataChannel.send(JSON.stringify({ type: "file-accept" }));
-    addMsg(`<em>Downloading ${incomingFileInfo.name}...</em>`, "me");
-  };
-
-  // 4. Sender streams the file in chunks
-  function startFileTransfer() {
-    if (!pendingFile) return;
-    
-    const CHUNK_SIZE = 16384; // 16KB limit for max compatibility
-    let offset = 0;
-    
-    addMsg(`<em>Uploading ${pendingFile.name}...</em>`, "sys");
-
-    const readSlice = (o) => {
-      const slice = pendingFile.slice(offset, o + CHUNK_SIZE);
-      const reader = new FileReader();
-      
-      reader.onload = (e) => {
-        if (dataChannel.readyState !== "open") return;
-        
-        dataChannel.send(e.target.result); // Send ArrayBuffer
-        offset += CHUNK_SIZE;
-        
-        if (offset < pendingFile.size) {
-          // Use setTimeout to avoid blocking the main UI thread during large reads
-          setTimeout(() => readSlice(offset), 0); 
-        } else {
-          dataChannel.send(JSON.stringify({ type: "file-done" }));
-          addMsg(`<em>Upload complete: ${pendingFile.name}</em>`, "sys");
-          pendingFile = null;
-        }
-      };
-      reader.readAsArrayBuffer(slice);
-    };
-    
-    readSlice(0);
-  }
-
-  // 5. Receiver combines chunks and triggers download
-  function finishFileReceive() {
-    const blob = new Blob(incomingFileData);
-    const url = URL.createObjectURL(blob);
-    
-    const fileHtml = `
-      <strong>File Received!</strong><br>
-      <a href="${url}" download="${incomingFileInfo.name}" style="color: blue; font-weight: bold; text-decoration: underline; display: inline-block; margin-top: 5px;">
-        Save ${incomingFileInfo.name}
-      </a>
-    `;
-    addMsg(fileHtml, "them");
-    addMsg(`<em>Download complete: ${incomingFileInfo.name}</em>`, "sys");
-    
-    // Cleanup memory
-    incomingFileInfo = null;
-    incomingFileData = [];
-  }
-
-  // --- AUTO-JOIN VIA QUERY PARAMETER ---
-  window.addEventListener("DOMContentLoaded", () => {
-    const params = new URLSearchParams(window.location.search);
-    const roomParam = params.get("room");
-    const videoParam = params.get("video") === "true";
-
-    if (roomParam) {
-      document.getElementById("roomName").value = roomParam;
-      document.getElementById("roomName").disabled = true;
-      document.getElementById("hostBtn").classList.add("hidden");
-
-      if (videoParam) {
-        document.getElementById("enableVideo").checked = true;
-        document.getElementById("joinBtn").classList.add("hidden");
-        updateStatus(`Video call invite for room "${roomParam}". Requesting camera & joining...`);
-        joinChat();
-      } else {
-        updateStatus(`Invite link detected for room "${roomParam}". Enable video if you want it, then click Join.`);
-      }
-    }
-  });
-</script>
-
-</body>
-</html>
