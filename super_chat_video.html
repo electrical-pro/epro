@@ -200,6 +200,8 @@
     return null;
   };
 
+  let audioTransceiver, videoTransceiver;
+
   const setupPeerConnection = () => {
     pc = new RTCPeerConnection(iceServers);
     pc.oniceconnectionstatechange = () => {
@@ -215,11 +217,21 @@
         remoteVideo.srcObject = event.streams[0];
       }
     };
+
+    // Pre-create transceivers in a FIXED order (audio, then video) on both
+    // host and joiner, always -- regardless of whether either side actually
+    // has a camera. This guarantees the offer and answer always agree on
+    // m-line order/count. A side with no camera just stays "recvonly",
+    // which also means it can still receive the other side's video even
+    // without sending its own.
+    audioTransceiver = pc.addTransceiver("audio", { direction: "recvonly" });
+    videoTransceiver = pc.addTransceiver("video", { direction: "recvonly" });
   };
 
-  // Grabs camera/mic (if the checkbox is on) and attaches tracks to pc
-  // BEFORE the offer/answer is created, so media rides along in the same
-  // signaling exchange we already have -- no renegotiation needed.
+  // Grabs camera/mic (if the checkbox is on) and attaches tracks to the
+  // ALREADY-EXISTING transceivers via replaceTrack, upgrading them to
+  // sendrecv -- never creates new transceivers, so m-line order/count
+  // set up in setupPeerConnection is never disturbed.
   const setupMediaIfEnabled = async () => {
     if (!document.getElementById("enableVideo").checked) return;
     try {
@@ -228,7 +240,17 @@
       const localVideo = document.getElementById("localVideo");
       localVideo.classList.remove("hidden");
       localVideo.srcObject = stream;
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+      const audioTrack = stream.getAudioTracks()[0];
+      const videoTrack = stream.getVideoTracks()[0];
+      if (audioTrack) {
+        await audioTransceiver.sender.replaceTrack(audioTrack);
+        audioTransceiver.direction = "sendrecv";
+      }
+      if (videoTrack) {
+        await videoTransceiver.sender.replaceTrack(videoTrack);
+        videoTransceiver.direction = "sendrecv";
+      }
     } catch (e) {
       console.error("getUserMedia failed:", e);
       updateStatus("Camera/mic access denied or unavailable -- continuing chat-only.");
@@ -353,9 +375,9 @@
 
     await pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp: offerContent.sdp }));
 
-    // Attach local media AFTER applying the remote offer, so addTrack reuses
-    // the transceivers the offer already created (correct m-line order)
-    // instead of creating new ones that could end up in a different order.
+    // Local media is attached via replaceTrack on the transceivers created
+    // in setupPeerConnection -- order relative to setRemoteDescription no
+    // longer matters since no new transceivers get created here.
     await setupMediaIfEnabled();
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
