@@ -210,11 +210,13 @@
       }
     };
     pc.ontrack = (event) => {
+      console.log(`ontrack fired: kind=${event.track.kind}, id=${event.track.id}, streams=${event.streams.length}`);
       document.getElementById("videoRow").classList.remove("hidden");
       const remoteVideo = document.getElementById("remoteVideo");
       remoteVideo.classList.remove("hidden");
       if (remoteVideo.srcObject !== event.streams[0]) {
         remoteVideo.srcObject = event.streams[0];
+        remoteVideo.play().catch((e) => console.error("remoteVideo play() failed:", e));
       }
     };
 
