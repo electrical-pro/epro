@@ -296,6 +296,9 @@
     // Build the shareable link with query parameter
     const url = new URL(window.location.href);
     url.searchParams.set("room", roomName);
+    if (document.getElementById("enableVideo").checked) {
+      url.searchParams.set("video", "true");
+    }
     document.getElementById("shareUrl").value = url.toString();
     document.getElementById("shareContainer").classList.remove("hidden");
 
@@ -372,12 +375,24 @@
   window.addEventListener("DOMContentLoaded", () => {
     const params = new URLSearchParams(window.location.search);
     const roomParam = params.get("room");
+    const videoParam = params.get("video") === "true";
 
     if (roomParam) {
       document.getElementById("roomName").value = roomParam;
       document.getElementById("roomName").disabled = true;
       document.getElementById("hostBtn").classList.add("hidden");
-      updateStatus(`Invite link detected for room "${roomParam}". Enable video if you want it, then click Join.`);
+
+      if (videoParam) {
+        // The link already encodes "this is a video call" -- the browser's
+        // own camera permission dialog is the real consent step, so join
+        // immediately instead of making them click through first.
+        document.getElementById("enableVideo").checked = true;
+        document.getElementById("joinBtn").classList.add("hidden");
+        updateStatus(`Video call invite for room "${roomParam}". Requesting camera & joining...`);
+        joinChat();
+      } else {
+        updateStatus(`Invite link detected for room "${roomParam}". Enable video if you want it, then click Join.`);
+      }
     }
   });
 </script>
