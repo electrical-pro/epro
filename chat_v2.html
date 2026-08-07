@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>P2P WebRTC Chat & File Transfer</title>
+<style>
+  body { 
+    font-family: system-ui, -apple-system, sans-serif; 
+    max-width: 600px; 
+    margin: 2rem auto; 
+    padding: 0 1rem; 
+    background-color: #f4f4f9;
+  }
+  h2 { color: #333; }
+  
+  .controls { 
+    margin-bottom: 15px; 
+    padding: 20px; 
+    background: #fff; 
+    border-radius: 8px; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+  }
+  
+  input[type="text"] { 
+    padding: 10px; 
+    border: 1px solid #ccc; 
+    border-radius: 4px;
+    font-size: 16px;
+  }
+  
+  button { 
+    padding: 10px 16px; 
+    cursor: pointer; 
+    background: #007bff; 
+    color: white; 
+    border: none; 
+    border-radius: 4px; 
+    font-size: 16px;
+    transition: background 0.2s;
+  }
+  button:hover { background: #0056b3; }
+  
+  .share-box {
+    margin-top: 15px;
+    padding: 12px;
+    background: #eef6ff;
+    border: 1px solid #b6d4fe;
+    border-radius: 6px;
+  }
+  
+  #chatUI { 
+    background: #fff; 
+    padding: 15px; 
+    border-radius: 8px; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+    transition: background 0.3s;
+  }
+  
+  #chatUI.dragover {
+    background: #e6f2ff;
+    border: 2px dashed #007bff;
+  }
+
+  #connBadges {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78em;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: #f1f1f1;
+    color: #555;
+    font-weight: 600;
+  }
+  .badge .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #999;
+    flex-shrink: 0;
+  }
+  .badge.state-live .dot, .badge.state-connected .dot { background: #28a745; }
+  .badge.state-connecting .dot { background: #ffc107; }
+  .badge.state-offline .dot, .badge.state-failed .dot { background: #dc3545; }
+
+  .roomBar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 0.85em;
+    color: #555;
+  }
+  .roomBar button {
+    font-size: 12px;
+    padding: 5px 10px;
+    background: #17a2b8;
+  }
+  
+  #chatBox { 
+    border: 1px solid #eee; 
+    height: 350px; 
+    overflow-y: auto; 
+    padding: 15px; 
+    margin-bottom: 15px; 
+    background: #fafafa;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .msg { 
+    margin: 5px 0; 
+    padding: 10px 14px; 
+    border-radius: 18px; 
+    width: fit-content; 
+    max-width: 75%; 
+    word-wrap: break-word;
+  }
+  .me { 
+    background: #007bff; 
+    color: white; 
+    margin-left: auto; 
+    border-bottom-right-radius: 4px;
+  }
+  .them { 
+    background: #e9ecef; 
+    color: black; 
+    margin-right: auto;
+    border-bottom-left-radius: 4px;
+  }
+  .sys { 
+    text-align: center; 
+    color: #888; 
+    font-size: 0.85em; 
+    margin: 10px auto; 
+  }
+  .via-relay {
+    opacity: 0.75;
+    font-size: 0.8em;
+    font-weight: normal;
+  }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<h2>Secure P2P Chat</h2>
+
+<div class="controls" id="setupUI">
+  <label style="font-weight: bold; display: block; margin-bottom: 8px;">Room Name / ID:</label>
+  <input type="text" id="roomName" placeholder="super-secret-chat-992" style="width: 100%; box-sizing: border-box; margin-bottom: 15px;">
+  
+  <div id="actionButtons" style="display: flex; gap: 10px;">
+    <button id="hostBtn" onclick="hostChat()" style="flex: 1;">1. Host Chat</button>
+    <button id="joinBtn" onclick="joinChat()" style="flex: 1; background: #28a745;">2. Join Chat</button>
+  </div>
+
+  <label id="videoLabel" style="display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 0.9em;">
+    <input type="checkbox" id="enableVideo">
+    Enable camera &amp; mic (video call)
+  </label>
+  
+  <div id="shareContainer" class="share-box hidden">
+    <label style="font-size: 0.9em; font-weight: bold; display: block; margin-bottom: 5px; color: #004085;">Share this link with your friend:</label>
+    <div style="display: flex; gap: 8px;">
+      <input type="text" id="shareUrl" readonly style="flex: 1; font-size: 14px; background: #fff;">
+      <button onclick="copyShareUrl()" style="background: #17a2b8; padding: 8px 12px; font-size: 14px;">Copy Link</button>
+    </div>
+  </div>
+
+  <p id="status" class="sys" style="text-align: left; margin-top: 15px;">Status: Waiting for input...</p>
+</div>
+
+<div id="chatUI" class="hidden">
+  <div class="roomBar">
+    <span id="roomLabel"></span>
+    <button id="copyLinkBtn" class="hidden" onclick="copyShareUrl()">Copy Invite Link</button>
+  </div>
+
+  <div id="connBadges">
+    <span id="wsBadge" class="badge state-offline"><span class="dot"></span><span class="label">Signaling: offline</span></span>
+    <span id="p2pBadge" class="badge state-offline"><span class="dot"></span><span class="label">P2P: not connected</span></span>
+  </div>
+
+  <div id="videoRow" class="hidden" style="display: flex; gap: 10px; margin-bottom: 15px;">
+    <video id="localVideo" class="hidden" autoplay muted playsinline style="flex: 1; min-width: 0; border-radius: 8px; background: #000;"></video>
+    <video id="remoteVideo" class="hidden" autoplay playsinline style="flex: 1; min-width: 0; border-radius: 8px; background: #000;"></video>
+  </div>
+  
+  <p class="sys" style="margin-top: 0;">Drag and drop files here to send them! (needs a direct P2P connection)</p>
+  
+  <div id="chatBox"></div>
+  <div style="display: flex; gap: 10px;">
+    <input type="text" id="msgInput" placeholder="Type a message..." style="flex: 1;" onkeypress="if(event.key === 'Enter') sendMsg()">
+    <button onclick="sendMsg()">Send</button>
+  </div>
+</div>
+
+<script>
+  // ---------------------------------------------------------------------
+  // State
+  // ---------------------------------------------------------------------
+  let pc = null;
+  let dataChannel = null;
+  let roomName = "";      // human-entered room name
+  let room = "";           // namespaced room id used on the wire
+  let role = null;         // "host" | "join"
+  let signalingUrl = null;
+
+  let ws = null;
+  let wsShouldRun = false;   // true once the user has started hosting/joining
+  let reconnectAttempts = 0;
+  let reconnectTimer = null;
+
+  let localSdp = null;       // our current offer (host) or answer (join) sdp
+  let sdpKind = null;        // "offer" | "answer"
+  let remoteOfferApplied = false; // join-side guard against reprocessing the offer
+  let retryTimer = null;
+
+  let pendingFile = null;
+  let incomingFileInfo = null;
+  let incomingFileData = [];
+  let audioTransceiver, videoTransceiver;
+
+  const APP_NS = "qk7x2v9p";
+  const namespacedRoom = (name) => `${APP_NS}:${name}`;
+
+  const iceServers = {
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun.cloudflare.com:3478" }
+    ]
+  };
+
+  // ---------------------------------------------------------------------
+  // Small UI helpers
+  // ---------------------------------------------------------------------
+  const updateStatus = (text) => {
+    document.getElementById("status").textContent = "Status: " + text;
+  };
+
+  const addMsg = (text, type) => {
+    const box = document.getElementById("chatBox");
+    const div = document.createElement("div");
+    div.className = "msg " + type;
+    div.innerHTML = text;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+  };
+
+  function formatBytes(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024, sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  const getRandomSuffix = () => Math.random().toString(36).substring(2, 8);
+
+  const setBadge = (id, state, label) => {
+    const el = document.getElementById(id);
+    el.className = "badge state-" + state;
+    el.querySelector(".label").textContent = label;
+  };
+
+  const updateWsBadge = (state) => {
+    const labels = {
+      offline: "Signaling: offline",
+      connecting: "Signaling: connecting...",
+      live: "Signaling: live",
+      reconnecting: "Signaling: reconnecting..."
+    };
+    setBadge("wsBadge", state, labels[state] || state);
+  };
+
+  const updateP2pBadge = (state) => {
+    const labels = {
+      offline: "P2P: not connected",
+      connecting: "P2P: connecting...",
+      connected: "P2P: connected (direct)",
+      failed: "P2P: unavailable (using relay)"
+    };
+    setBadge("p2pBadge", state, labels[state] || state);
+  };
+
+  // ---------------------------------------------------------------------
+  // Signaling: a WebSocket relay that broadcasts each message to every
+  // OTHER connected client (never back to the sender), with no storage or
+  // replay. Two consequences that drive the design below:
+  //  1. Every message needs a `room` field so peers can tell "for me" apart
+  //     from "for someone else" sharing the same relay.
+  //  2. Nothing is guaranteed delivered once, ever, or in order, so the
+  //     offer/answer exchange is self-healing: whichever side still needs
+  //     something keeps re-announcing its own SDP on a timer until the
+  //     handshake completes, and the connection survives the relay
+  //     reconnecting mid-flight.
+  // The same socket also carries plain chat text, used as a fallback
+  // whenever the direct P2P data channel isn't (yet, or isn't ever) open.
+  // ---------------------------------------------------------------------
+  const getSignalingUrl = () => {
+    const params = new URLSearchParams(window.location.search);
+    let sig = params.get("signaling");
+    if (!sig) return null;
+    sig = sig.trim();
+    if (!/^wss?:\/\//i.test(sig)) sig = "wss://" + sig;
+    return sig;
+  };
+
+  const sendSignal = (payload) => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    ws.send(JSON.stringify({ room, ...payload }));
+    return true;
+  };
+
+  function handleSignalMessage(event) {
+    let msg;
+    try {
+      msg = JSON.parse(event.data);
+    } catch (e) {
+      return;
+    }
+    if (!msg || msg.room !== room) return;
+
+    if (msg.kind === "chat") {
+      addMsg(msg.text, "them");
+    } else if (msg.kind === "offer" && role === "join") {
+      handleIncomingOffer(msg);
+    } else if (msg.kind === "answer" && role === "host") {
+      handleIncomingAnswer(msg);
+    }
+  }
+
+  function openSignalingSocket() {
+    updateWsBadge(reconnectAttempts > 0 ? "reconnecting" : "connecting");
+    try {
+      ws = new WebSocket(signalingUrl);
+    } catch (e) {
+      scheduleReconnect();
+      return;
+    }
+
+    ws.addEventListener("open", () => {
+      reconnectAttempts = 0;
+      updateWsBadge("live");
+      // If we already have SDP we're waiting to hand off, re-announce it
+      // immediately instead of waiting for the retry timer.
+      if (localSdp) sendSignal({ kind: sdpKind, sdp: localSdp });
+    });
+
+    ws.addEventListener("message", handleSignalMessage);
+
+    ws.addEventListener("close", () => {
+      if (!wsShouldRun) return;
+      scheduleReconnect();
+    });
+
+    ws.addEventListener("error", () => {
+      // "close" fires right after "error" for WebSocket, which triggers
+      // the reconnect logic above -- nothing extra to do here.
+    });
+  }
+
+  function scheduleReconnect() {
+    if (!wsShouldRun) return;
+    updateWsBadge("offline");
+    clearTimeout(reconnectTimer);
+    reconnectAttempts++;
+    const delay = Math.min(1000 * 2 ** reconnectAttempts, 10000);
+    reconnectTimer = setTimeout(openSignalingSocket, delay);
+  }
+
+  // Kicks off the signaling connection and resolves once it's open the
+  // first time (rejects if there's no ?signaling= param at all).
+  const connectSignaling = () => {
+    return new Promise((resolve, reject) => {
+      signalingUrl = getSignalingUrl();
+      if (!signalingUrl) {
+        reject(new Error("No signaling server set. Add ?signaling=your-ws-host to the page URL."));
+        return;
+      }
+      wsShouldRun = true;
+      reconnectAttempts = 0;
+
+      const timeout = setTimeout(() => {
+        reject(new Error("Could not reach signaling server: " + signalingUrl));
+      }, 7000);
+
+      openSignalingSocket();
+      ws.addEventListener("open", () => {
+        clearTimeout(timeout);
+        resolve();
+      }, { once: true });
+    });
+  };
+
+  // Keeps (re)sending our current local SDP until the P2P connection is
+  // actually up, so a dropped relay message or a late-arriving peer can't
+  // permanently strand the handshake.
+  function startRetryLoop() {
+    clearInterval(retryTimer);
+    retryTimer = setInterval(() => {
+      if (!pc || pc.connectionState === "connected" || pc.connectionState === "closed") {
+        clearInterval(retryTimer);
+        return;
+      }
+      if (localSdp) sendSignal({ kind: sdpKind, sdp: localSdp });
+    }, 1500);
+  }
+
+  async function handleIncomingAnswer(msg) {
+    // have-local-offer -> stable is the only valid transition here; once
+    // we're past it, ignore further copies of the answer.
+    if (!pc || pc.signalingState !== "have-local-offer") return;
+    updateStatus("Answer received, establishing P2P connection...");
+    await pc.setRemoteDescription(new RTCSessionDescription({ type: "answer", sdp: msg.sdp }));
+  }
+
+  async function handleIncomingOffer(msg) {
+    if (remoteOfferApplied) {
+      // Host is still retrying because our answer hasn't reached it yet --
+      // just resend the answer we already computed.
+      if (localSdp) sendSignal({ kind: "answer", sdp: localSdp });
+      return;
+    }
+    remoteOfferApplied = true;
+    updateStatus("Host found! Generating answer...");
+    await pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp: msg.sdp }));
+
+    const transceivers = pc.getTransceivers();
+    audioTransceiver = transceivers.find(t => t.receiver.track?.kind === "audio");
+    videoTransceiver = transceivers.find(t => t.receiver.track?.kind === "video");
+
+    await setupMediaIfEnabled();
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+
+    updateStatus("Gathering network candidates...");
+    await waitForIceComplete();
+
+    localSdp = pc.localDescription.sdp;
+    sdpKind = "answer";
+    sendSignal({ kind: "answer", sdp: localSdp });
+    startRetryLoop();
+    updateStatus("Answer sent. Establishing direct connection...");
+  }
+
+  // ---------------------------------------------------------------------
+  // WebRTC peer connection
+  // ---------------------------------------------------------------------
+  const setupPeerConnection = (isHost = false) => {
+    pc = new RTCPeerConnection(iceServers);
+
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === "connected") {
+        updateP2pBadge("connected");
+        clearInterval(retryTimer);
+      } else if (pc.connectionState === "connecting" || pc.connectionState === "new") {
+        updateP2pBadge("connecting");
+      } else if (pc.connectionState === "disconnected" || pc.connectionState === "failed" || pc.connectionState === "closed") {
+        updateP2pBadge("failed");
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === "disconnected" || pc.iceConnectionState === "failed") {
+        addMsg("Direct P2P link lost. Falling back to relay for text (if signaling is live).", "sys");
+      }
+    };
+
+    pc.ontrack = (event) => {
+      const track = event.track;
+      document.getElementById("videoRow").classList.remove("hidden");
+      const remoteVideo = document.getElementById("remoteVideo");
+      remoteVideo.classList.remove("hidden");
+
+      if (!remoteVideo.srcObject) {
+        remoteVideo.srcObject = new MediaStream();
+      }
+      remoteVideo.srcObject.addTrack(track);
+      remoteVideo.play().catch(() => {});
+    };
+
+    if (isHost) {
+      // FIX: Defaulting to bi-directional pipes prevents the 'Incompatible send direction'
+      // crash when the Host starts with media off but the Joiner starts with it on.
+      audioTransceiver = pc.addTransceiver("audio", { direction: "sendrecv" });
+      videoTransceiver = pc.addTransceiver("video", { direction: "sendrecv" });
+    }
+  };
+
+  const setupMediaIfEnabled = async () => {
+    if (!document.getElementById("enableVideo").checked) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      document.getElementById("videoRow").classList.remove("hidden");
+      const localVideo = document.getElementById("localVideo");
+      localVideo.classList.remove("hidden");
+      localVideo.srcObject = stream;
+
+      const audioTrack = stream.getAudioTracks()[0];
+      const videoTrack = stream.getVideoTracks()[0];
+
+      if (audioTrack && audioTransceiver) {
+        await audioTransceiver.sender.replaceTrack(audioTrack);
+        audioTransceiver.direction = "sendrecv";
+      }
+      if (videoTrack && videoTransceiver) {
+        await videoTransceiver.sender.replaceTrack(videoTrack);
+        videoTransceiver.direction = "sendrecv";
+      }
+    } catch (e) {
+      updateStatus("Camera/mic access denied -- continuing chat-only.");
+    }
+  };
+
+  const setupDataChannel = () => {
+    dataChannel.binaryType = "arraybuffer";
+
+    dataChannel.onopen = () => {
+      updateP2pBadge("connected");
+      addMsg("Direct P2P link established. Chat and files now go peer-to-peer.", "sys");
+    };
+
+    dataChannel.onclose = () => {
+      updateP2pBadge("failed");
+    };
+
+    dataChannel.onmessage = (event) => {
+      if (event.data instanceof ArrayBuffer) {
+        incomingFileData.push(event.data);
+        return;
+      }
+
+      try {
+        const msg = JSON.parse(event.data);
+
+        if (msg.type === "file-offer") {
+          incomingFileInfo = msg;
+          incomingFileData = [];
+          const fileHtml = `
+            <strong>File Offered:</strong> ${msg.name} (${formatBytes(msg.size)})<br>
+            <button onclick="acceptFileTransfer()" style="margin-top:8px; padding: 6px 12px; font-size: 13px; background: #28a745;">Download File</button>
+          `;
+          addMsg(fileHtml, "them");
+        }
+        else if (msg.type === "file-accept") {
+          startFileTransfer();
+        }
+        else if (msg.type === "file-done") {
+          finishFileReceive();
+        }
+        else {
+          addMsg(event.data, "them");
+        }
+      } catch (e) {
+        addMsg(event.data, "them");
+      }
+    };
+  };
+
+  const waitForIceComplete = async (maxWaitMs = 4000) => {
+    if (pc.iceGatheringState === "complete") return;
+    await new Promise((resolve) => {
+      const done = () => {
+        pc.removeEventListener("icegatheringstatechange", onChange);
+        resolve();
+      };
+      const onChange = () => {
+        if (pc.iceGatheringState === "complete") done();
+      };
+      pc.addEventListener("icegatheringstatechange", onChange);
+      setTimeout(done, maxWaitMs);
+    });
+  };
+
+  function copyShareUrl() {
+    const shareInput = document.getElementById("shareUrl");
+    shareInput.select();
+    navigator.clipboard.writeText(shareInput.value);
+    updateStatus("Link copied to clipboard! Send it to your friend.");
+  }
+
+  // Switches from the "set up a room" screen to the chat screen. Called as
+  // soon as signaling is live, well before P2P may be ready -- the relay
+  // fallback means there's already something useful the user can do.
+  function enterChatUI(isHost) {
+    document.getElementById("actionButtons").classList.add("hidden");
+    document.getElementById("videoLabel").classList.add("hidden");
+    document.getElementById("roomName").disabled = true;
+    document.getElementById("roomLabel").textContent = `Room: ${roomName}`;
+    if (isHost) document.getElementById("copyLinkBtn").classList.remove("hidden");
+    document.getElementById("chatUI").classList.remove("hidden");
+  }
+
+  async function hostChat() {
+    let baseRoom = document.getElementById("roomName").value.trim() || "super-secret-chat-992";
+    roomName = baseRoom.includes("-") ? baseRoom : `${baseRoom}-${getRandomSuffix()}`;
+    document.getElementById("roomName").value = roomName;
+    role = "host";
+    room = namespacedRoom(roomName);
+
+    const url = new URL(window.location.href);
+    url.searchParams.set("room", roomName);
+    url.searchParams.set("video", document.getElementById("enableVideo").checked ? "true" : "false");
+    document.getElementById("shareUrl").value = url.toString();
+    document.getElementById("shareContainer").classList.remove("hidden");
+
+    try {
+      updateStatus("Connecting to signaling server...");
+      await connectSignaling();
+    } catch (e) {
+      updateStatus(e.message);
+      return;
+    }
+
+    enterChatUI(true);
+    updateStatus("Generating offer...");
+    updateP2pBadge("connecting");
+    setupPeerConnection(true);
+    await setupMediaIfEnabled();
+
+    dataChannel = pc.createDataChannel("chat");
+    setupDataChannel();
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    updateStatus("Gathering network candidates...");
+    await waitForIceComplete();
+
+    localSdp = pc.localDescription.sdp;
+    sdpKind = "offer";
+    sendSignal({ kind: "offer", sdp: localSdp });
+    startRetryLoop();
+    updateStatus("Room is live -- you can chat now. Waiting for your friend to establish a direct P2P link...");
+  }
+
+  async function joinChat() {
+    roomName = document.getElementById("roomName").value.trim();
+    if (!roomName) return alert("Please enter or paste a room name.");
+    role = "join";
+    room = namespacedRoom(roomName);
+
+    try {
+      updateStatus("Connecting to signaling server...");
+      await connectSignaling();
+    } catch (e) {
+      updateStatus(e.message);
+      return;
+    }
+
+    enterChatUI(false);
+    updateStatus("Connected to signaling. Waiting for host...");
+    updateP2pBadge("connecting");
+    setupPeerConnection(false);
+
+    pc.ondatachannel = (event) => {
+      dataChannel = event.channel;
+      setupDataChannel();
+    };
+  }
+
+  function sendMsg() {
+    const input = document.getElementById("msgInput");
+    const val = input.value.trim();
+    if (!val) return;
+    const escapedVal = val.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    if (dataChannel && dataChannel.readyState === "open") {
+      dataChannel.send(escapedVal);
+      addMsg(escapedVal, "me");
+    } else if (room && sendSignal({ kind: "chat", text: escapedVal })) {
+      addMsg(escapedVal + ' <span class="via-relay">(via relay)</span>', "me");
+    } else {
+      addMsg("Not connected yet -- message wasn't sent.", "sys");
+      return;
+    }
+    input.value = "";
+  }
+
+  const chatUI = document.getElementById("chatUI");
+
+  chatUI.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    chatUI.classList.add("dragover");
+  });
+
+  chatUI.addEventListener("dragleave", (e) => {
+    e.preventDefault();
+    chatUI.classList.remove("dragover");
+  });
+
+  chatUI.addEventListener("drop", (e) => {
+    e.preventDefault();
+    chatUI.classList.remove("dragover");
+
+    if (e.dataTransfer.files.length > 0) {
+      if (dataChannel && dataChannel.readyState === "open") {
+        offerFile(e.dataTransfer.files[0]);
+      } else {
+        alert("You need a direct P2P connection (not just the relay) to send files.");
+      }
+    }
+  });
+
+  function offerFile(file) {
+    pendingFile = file;
+    const msg = {
+      type: "file-offer",
+      name: file.name,
+      size: file.size
+    };
+    dataChannel.send(JSON.stringify(msg));
+    addMsg(`<em>Offered file: ${file.name} (${formatBytes(file.size)}). Waiting for them to accept...</em>`, "me");
+  }
+
+  window.acceptFileTransfer = function() {
+    dataChannel.send(JSON.stringify({ type: "file-accept" }));
+    addMsg(`<em>Downloading ${incomingFileInfo.name}...</em>`, "me");
+  };
+
+  function startFileTransfer() {
+    if (!pendingFile) return;
+
+    const CHUNK_SIZE = 16384;
+    let offset = 0;
+
+    addMsg(`<em>Uploading ${pendingFile.name}...</em>`, "sys");
+
+    const readSlice = (o) => {
+      const slice = pendingFile.slice(offset, o + CHUNK_SIZE);
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        if (dataChannel.readyState !== "open") return;
+
+        dataChannel.send(e.target.result);
+        offset += CHUNK_SIZE;
+
+        if (offset < pendingFile.size) {
+          setTimeout(() => readSlice(offset), 0);
+        } else {
+          dataChannel.send(JSON.stringify({ type: "file-done" }));
+          addMsg(`<em>Upload complete: ${pendingFile.name}</em>`, "sys");
+          pendingFile = null;
+        }
+      };
+      reader.readAsArrayBuffer(slice);
+    };
+
+    readSlice(0);
+  }
+
+  function finishFileReceive() {
+    const blob = new Blob(incomingFileData);
+    const url = URL.createObjectURL(blob);
+
+    const fileHtml = `
+      <strong>File Received!</strong><br>
+      <a href="${url}" download="${incomingFileInfo.name}" style="color: blue; font-weight: bold; text-decoration: underline; display: inline-block; margin-top: 5px;">
+        Save ${incomingFileInfo.name}
+      </a>
+    `;
+    addMsg(fileHtml, "them");
+    addMsg(`<em>Download complete: ${incomingFileInfo.name}</em>`, "sys");
+
+    incomingFileInfo = null;
+    incomingFileData = [];
+  }
+
+  window.addEventListener("DOMContentLoaded", () => {
+    const params = new URLSearchParams(window.location.search);
+    const roomParam = params.get("room");
+    const videoParam = params.get("video") === "true";
+
+    if (!getSignalingUrl()) {
+      updateStatus('No signaling server set. Add "?signaling=your-ws-host" to this page\'s URL (e.g. ?signaling=ws-verbatim.ur4ulq.workers.dev).');
+      return;
+    }
+
+    if (roomParam) {
+      document.getElementById("roomName").value = roomParam;
+      document.getElementById("roomName").disabled = true;
+      document.getElementById("hostBtn").classList.add("hidden");
+
+      if (videoParam) document.getElementById("enableVideo").checked = true;
+
+      // A room link always means "join": connect to signaling, show the
+      // chat screen (relay fallback active), and negotiate P2P in the
+      // background. Works the same on first load and on a page reload.
+      updateStatus(`Invite link detected for room "${roomParam}". Connecting...`);
+      joinChat();
+    }
+  });
+</script>
+
+</body>
+</html>
