@@ -131,8 +131,8 @@
 <!-- Chat Interface UI -->
 <div id="chatUI" class="hidden">
   <div id="videoRow" class="hidden" style="display: flex; gap: 10px; margin-bottom: 15px;">
-    <video id="localVideo" autoplay muted playsinline style="width: 50%; border-radius: 8px; background: #000;"></video>
-    <video id="remoteVideo" autoplay playsinline style="width: 50%; border-radius: 8px; background: #000;"></video>
+    <video id="localVideo" class="hidden" autoplay muted playsinline style="flex: 1; min-width: 0; border-radius: 8px; background: #000;"></video>
+    <video id="remoteVideo" class="hidden" autoplay playsinline style="flex: 1; min-width: 0; border-radius: 8px; background: #000;"></video>
   </div>
   <div id="chatBox"></div>
   <div style="display: flex; gap: 10px;">
@@ -206,6 +206,7 @@
     pc.ontrack = (event) => {
       document.getElementById("videoRow").classList.remove("hidden");
       const remoteVideo = document.getElementById("remoteVideo");
+      remoteVideo.classList.remove("hidden");
       if (remoteVideo.srcObject !== event.streams[0]) {
         remoteVideo.srcObject = event.streams[0];
       }
@@ -220,7 +221,9 @@
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       document.getElementById("videoRow").classList.remove("hidden");
-      document.getElementById("localVideo").srcObject = stream;
+      const localVideo = document.getElementById("localVideo");
+      localVideo.classList.remove("hidden");
+      localVideo.srcObject = stream;
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
     } catch (e) {
       console.error("getUserMedia failed:", e);
