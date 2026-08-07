@@ -177,7 +177,11 @@
   const dweetFor = async (thing, data) => {
     try {
       const params = new URLSearchParams(data);
-      await fetch(`https://dweet.cc/dweet/for/${thing}?${params.toString()}`);
+      await fetch(`https://dweet.cc/dweet/for/${thing}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: params.toString()
+      });
     } catch (e) {
       console.error("Dweet error:", e);
     }
@@ -335,7 +339,6 @@
 
     updateStatus("Searching for host...");
     setupPeerConnection();
-    await setupMediaIfEnabled();
 
     pc.ondatachannel = (event) => {
       dataChannel = event.channel;
@@ -349,6 +352,11 @@
     updateStatus("Host found! Generating answer...");
 
     await pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp: offerContent.sdp }));
+
+    // Attach local media AFTER applying the remote offer, so addTrack reuses
+    // the transceivers the offer already created (correct m-line order)
+    // instead of creating new ones that could end up in a different order.
+    await setupMediaIfEnabled();
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
 
