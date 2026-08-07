@@ -229,6 +229,7 @@
       }
     }, 8000);
   };
+  const waitForIceComplete = async () => {
     return new Promise(resolve => {
       if (pc.iceGatheringState === "complete") return resolve();
       pc.onicegatheringstatechange = () => {
