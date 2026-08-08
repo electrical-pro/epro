@@ -212,6 +212,28 @@
   }
   a { color: #7fb3e8; }
   .hidden { display: none !important; }
+
+  /* Input row flexbox styling */
+  .chat-input-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  
+  /* Mobile responsiveness adjustments */
+  @media (max-width: 480px) {
+    .chat-input-row {
+      gap: 6px;
+    }
+    button {
+      padding: 8px 12px;
+      font-size: 14px;
+    }
+    input[type="text"] {
+      font-size: 14px;
+      padding: 8px;
+    }
+  }
 </style>
 </head>
 <body>
@@ -230,7 +252,7 @@
   <div id="shareContainer" class="share-box hidden">
     <label style="font-size: 0.9em; font-weight: bold; display: block; margin-bottom: 5px;">Share this link with your friend:</label>
     <div style="display: flex; gap: 8px;">
-      <input type="text" id="shareUrl" readonly style="flex: 1; font-size: 14px;">
+      <input type="text" id="shareUrl" readonly style="flex: 1; font-size: 14px; min-width: 0;">
       <button onclick="copyShareUrl()" style="background: var(--teal); color: #04211d; padding: 8px 12px; font-size: 14px;">Copy Link</button>
     </div>
   </div>
@@ -262,10 +284,10 @@
   <p class="sys" style="margin-top: 0;">Drag and drop files here or use the attach button to send them! (needs a direct P2P connection)</p>
 
   <div id="chatBox"></div>
-  <div style="display: flex; gap: 10px;">
+  <div class="chat-input-row">
     <input type="file" id="fileInput" class="hidden" onchange="handleFileSelect(event)">
     <button onclick="document.getElementById('fileInput').click()" style="padding: 10px; background: var(--panel-2); border: 1px solid var(--border); color: var(--text);" title="Attach File">📎</button>
-    <input type="text" id="msgInput" placeholder="Type a message..." style="flex: 1;" onkeypress="if(event.key === 'Enter') sendMsg()">
+    <input type="text" id="msgInput" placeholder="Type a message..." style="flex: 1; min-width: 0;" onkeypress="if(event.key === 'Enter') sendMsg()">
     <button onclick="sendMsg()">Send</button>
   </div>
 </div>
