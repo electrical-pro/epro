@@ -611,9 +611,24 @@
   function triggerReconnect(fromPc) {
     if (fromPc !== pc) return;
     if (inProgress) return;
-    addMsg(everConnected ? "Direct P2P link lost -- reconnecting..." : "Still trying to establish a direct link...", "sys");
-    if (role === "host") establishHostConnection();
-    else establishJoinConnection();
+
+    if (role === "host") {
+      // Only worth rebuilding + re-broadcasting our offer if a heartbeat
+      // (over either transport) proves someone is still actually in the
+      // room to receive it -- otherwise go quiet and wait for a fresh
+      // "hello" instead of blasting SDP into an empty room every 1.5s.
+      const peerRecentlySeen = lastPeerHeartbeat && (Date.now() - lastPeerHeartbeat < HEARTBEAT_TIMEOUT_MS);
+      if (peerRecentlySeen) {
+        addMsg(everConnected ? "Direct P2P link lost -- reconnecting..." : "Still trying to establish a direct link...", "sys");
+        establishHostConnection();
+      } else {
+        if (everConnected) addMsg("Direct P2P link lost, and your friend seems to have left -- waiting for them to come back...", "sys");
+        enterHostWaitingState("Waiting for your friend to (re)join...");
+      }
+    } else {
+      addMsg(everConnected ? "Direct P2P link lost -- reconnecting..." : "Still trying to establish a direct link...", "sys");
+      establishJoinConnection();
+    }
   }
 
   function updateVideoRowVisibility() {
@@ -751,6 +766,28 @@
   // need to recover -- there's only one path, so the host never needs a
   // manual restart.
   // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------
+  // Host: while no one has said "hello" yet (or the peer has gone stale --
+  // see triggerReconnect below), just sit quietly instead of building and
+  // re-broadcasting the offer every 1.5s. The offer carries the full SDP,
+  // which can run into many KB once video m-lines are in play, so blasting
+  // it into a room nobody is listening in is pure waste on the signaling
+  // server. "hello" is tiny and the joiner already announces it on its own
+  // loop the whole time it isn't connected, so we lose nothing by waiting
+  // for one before spending any bandwidth.
+  // ---------------------------------------------------------------------
+  function enterHostWaitingState(message) {
+    setAnnounce(null);
+    inProgress = false;
+    clearTimeout(buildTimeoutTimer);
+    clearTimeout(watchdogTimer);
+    if (pc) { try { pc.close(); } catch (e) {} }
+    pc = null;
+    resetRemoteVideo();
+    updateP2pBadge("offline");
+    updateStatus(message);
+  }
+
   async function establishHostConnection() {
     inProgress = true;
     clearTimeout(buildTimeoutTimer);
@@ -977,7 +1014,7 @@
     }
 
     enterChatUI(true);
-    establishHostConnection();
+    enterHostWaitingState("Room is live -- waiting for your friend to join...");
   }
 
   async function joinChat() {
