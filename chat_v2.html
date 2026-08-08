@@ -472,12 +472,6 @@
 
   // ---------------------------------------------------------------------
   // WebRTC peer connection lifecycle
-  //
-  // Every RTCPeerConnection we create is captured in a local `myPc`. All
-  // its handlers and every async continuation that touches it check
-  // `pc === myPc` before acting. That single identity check is what lets
-  // us freely tear down and rebuild the connection (on reconnect) without
-  // stale timers or events from a superseded connection corrupting state.
   // ---------------------------------------------------------------------
   const setupPeerConnection = (isHost) => {
     const myPc = new RTCPeerConnection(iceServers);
@@ -515,25 +509,24 @@
       const remoteVideo = document.getElementById("remoteVideo");
       if (!remoteVideo.srcObject) remoteVideo.srcObject = new MediaStream();
       remoteVideo.srcObject.addTrack(track);
+      
+      // Force the video element to recognize the newly added track (fixes Safari/Chrome bugs)
+      remoteVideo.srcObject = remoteVideo.srcObject;
       remoteVideo.play().catch(() => {});
-      // Visibility is NOT decided here. A transceiver's receiver track
-      // exists (and ontrack fires) the moment the connection is
-      // negotiated, whether or not the other side's camera is actually
-      // on -- that's what caused the empty black box before. The track's
-      // own mute/unmute events are supposed to reflect real frames vs.
-      // not, but that signal is unreliable across browsers for this
-      // exact "m-line active, no track yet" case. Instead, each side
-      // explicitly announces "my video is on/off" over the data channel
-      // (see startLocalVideo/stopLocalVideo/handleRemoteVideoState) and
-      // that's what actually shows or hides the box.
     };
 
     if (isHost) {
-      // Always negotiate bi-directional audio/video pipes up front, even
-      // though nothing is sent until the user turns video on. That way
-      // turning it on later is just attaching a track -- no renegotiation.
+      // Always negotiate bi-directional audio/video pipes up front
       audioTransceiver = myPc.addTransceiver("audio", { direction: "sendrecv" });
       videoTransceiver = myPc.addTransceiver("video", { direction: "sendrecv" });
+
+      // FIX: The host created these transceivers, so 'ontrack' won't fire for them.
+      // We must manually attach the synchronously created receiver tracks right now.
+      const remoteVideo = document.getElementById("remoteVideo");
+      if (!remoteVideo.srcObject) remoteVideo.srcObject = new MediaStream();
+      remoteVideo.srcObject.addTrack(audioTransceiver.receiver.track);
+      remoteVideo.srcObject.addTrack(videoTransceiver.receiver.track);
+      remoteVideo.srcObject = remoteVideo.srcObject;
     }
 
     return myPc;
