@@ -1481,8 +1481,10 @@ const MyTelem = {
     if (war) {
       if (war.AirRaid)    add('airRaid', `AIR ALERT IN ${war.alertsTotal} REG`, 'danger');
       if (war.locations && war.locations.length > 4) add('warLocations', war.locations, 'danger');
-      if (war.activLocal) add('local', '🏠 LOCAL', 'danger');
+      
       if (war.hasAct)     add('HasActivity', '✈️ ACTIV', 'danger');
+      if (war.neptuneActive) add('local', '🚀 NEPTUN', 'danger');
+      if (war.rapid)      add('HasActivity', '🚀 RAPID', 'danger');
 
       if (war.chem === true) add('chem', '☣️ CHEMICAL ATTACK', 'danger');
       if (war.nuke === true) add('nuke', '☢️ NUCLEAR ATTACK', 'danger');
