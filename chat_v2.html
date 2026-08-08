@@ -181,6 +181,35 @@
     font-size: 0.8em;
     font-weight: normal;
   }
+  .transfer { min-width: 230px; }
+  .transfer-label { font-size: 0.85em; font-weight: 600; margin-bottom: 6px; }
+  .transfer-bar-track {
+    height: 8px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .me .transfer-bar-track { background: rgba(255,255,255,0.3); }
+  .transfer-bar-fill {
+    height: 100%;
+    background: var(--teal);
+    width: 0%;
+  }
+  .transfer-meta {
+    font-size: 0.78em;
+    opacity: 0.85;
+    margin-top: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .transfer-meta button {
+    font-size: 0.75em;
+    padding: 2px 9px;
+    background: var(--red);
+    flex-shrink: 0;
+  }
   a { color: #7fb3e8; }
   .hidden { display: none !important; }
 </style>
@@ -274,9 +303,27 @@
   let announceTimer = null;
   let pendingAnnounce = null; // fn re-sent on a timer until cleared
 
-  let pendingFile = null;
-  let incomingFileInfo = null;
-  let incomingFileData = [];
+  let pendingFile = null;       // File object queued/in-flight for upload
+  let uploadTransferId = null;  // ties an offer to its accept/chunks/done/cancel
+  let uploadAbort = false;      // cooperative stop flag for the upload loop
+
+  let incomingFileInfo = null;    // {type,name,size,transferId} for the active download
+  let incomingFileData = [];      // in-memory fallback buffer (no File System Access API)
+  let incomingWriter = null;      // streaming disk writer, when the browser supports it
+  let incomingReceived = 0;
+  let incomingStartTime = 0;
+  let downloadAbort = false;
+
+  // 16KB per DataChannel message -- the one chunk size that's safe across
+  // every browser's SCTP implementation. bufferedAmount watermarks give us
+  // real backpressure: without them, blasting reads at a multi-GB file
+  // faster than the network can drain them just piles the whole thing up
+  // in the browser's send buffer.
+  const FILE_CHUNK_SIZE = 16384;
+  const BUFFER_HIGH_WATERMARK = 1024 * 1024;
+  const BUFFER_LOW_WATERMARK = 256 * 1024;
+
+  const genTransferId = () => Math.random().toString(36).slice(2);
 
   let audioTransceiver, videoTransceiver;
   let localStream = null;
@@ -340,6 +387,15 @@
     const k = 1024, sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  function formatDuration(seconds) {
+    seconds = Math.max(0, Math.round(seconds));
+    if (seconds < 60) return `${seconds}s`;
+    const m = Math.floor(seconds / 60), s = seconds % 60;
+    if (m < 60) return `${m}m ${s}s`;
+    const h = Math.floor(m / 60), rm = m % 60;
+    return `${h}h ${rm}m`;
   }
 
   const getRandomSuffix = () => Math.random().toString(36).substring(2, 8);
@@ -716,12 +772,30 @@
     dc.onclose = () => {
       if (dataChannel !== dc) return;
       updateP2pBadge("failed");
+      if (incomingFileInfo) {
+        if (incomingWriter) { try { incomingWriter.abort(); } catch (e) {} incomingWriter = null; }
+        incomingFileData = [];
+        finishTransferProgress(incomingFileInfo.transferId, "Interrupted -- connection lost");
+        incomingFileInfo = null;
+      }
+      if (pendingFile) {
+        finishTransferProgress(uploadTransferId, "Interrupted -- connection lost");
+        pendingFile = null;
+        uploadTransferId = null;
+      }
     };
 
     dc.onmessage = (event) => {
       if (dataChannel !== dc) return;
       if (event.data instanceof ArrayBuffer) {
-        incomingFileData.push(event.data);
+        if (!incomingFileInfo || downloadAbort) return; // stray chunk, no active download
+        incomingReceived += event.data.byteLength;
+        if (incomingWriter) {
+          incomingWriter.write(event.data).catch(() => {}); // ordered, queued by the stream itself
+        } else {
+          incomingFileData.push(event.data);
+        }
+        updateTransferProgress(incomingFileInfo.transferId, incomingReceived, incomingFileInfo.size, incomingStartTime);
         return;
       }
 
@@ -733,15 +807,29 @@
           incomingFileData = [];
           const fileHtml = `
             <strong>File Offered:</strong> ${msg.name} (${formatBytes(msg.size)})<br>
-            <button onclick="acceptFileTransfer()" style="margin-top:8px; padding: 6px 12px; font-size: 13px; background: var(--green); color:#06210f;">Download File</button>
+            <button onclick="acceptFileTransfer('${msg.transferId}')" style="margin-top:8px; padding: 6px 12px; font-size: 13px; background: var(--green); color:#06210f;">Download File</button>
           `;
           addMsg(fileHtml, "them");
         }
         else if (msg.type === "file-accept") {
-          startFileTransfer();
+          if (msg.transferId === uploadTransferId) startFileTransfer();
         }
         else if (msg.type === "file-done") {
-          finishFileReceive();
+          if (incomingFileInfo && msg.transferId === incomingFileInfo.transferId) finishFileReceive();
+        }
+        else if (msg.type === "file-cancel") {
+          if (msg.transferId === uploadTransferId) {
+            uploadAbort = true;
+            finishTransferProgress(uploadTransferId, "Cancelled by recipient");
+            pendingFile = null;
+            uploadTransferId = null;
+          } else if (incomingFileInfo && msg.transferId === incomingFileInfo.transferId) {
+            downloadAbort = true;
+            if (incomingWriter) { try { incomingWriter.abort(); } catch (e) {} incomingWriter = null; }
+            incomingFileData = [];
+            finishTransferProgress(msg.transferId, "Cancelled by sender");
+            incomingFileInfo = null;
+          }
         }
         else if (msg.type === "video-state") {
           handleRemoteVideoState(msg.enabled);
@@ -1055,6 +1143,20 @@
 
   // ---------------------------------------------------------------------
   // File transfer (P2P only)
+  //
+  // Sending: reads the file 16KB at a time and pushes it straight into
+  // the data channel, but only as fast as the channel can actually drain
+  // -- bufferedAmount / bufferedamountlow give real backpressure so a
+  // multi-GB file doesn't just pile up unsent in the browser's own send
+  // buffer. Progress is reported off actual bytes handed to the channel.
+  //
+  // Receiving: if the browser supports the File System Access API, we
+  // stream each incoming chunk straight to a file on disk as it arrives
+  // -- memory use stays flat regardless of file size, which is what
+  // makes multi-GB transfers practical at all. Browsers without that API
+  // (Firefox, Safari) fall back to buffering chunks in memory and
+  // building a Blob at the end, same as before -- fine for small/medium
+  // files, just not for the multi-GB case.
   // ---------------------------------------------------------------------
   const chatUI = document.getElementById("chatUI");
 
@@ -1073,75 +1175,197 @@
     chatUI.classList.remove("dragover");
 
     if (e.dataTransfer.files.length > 0) {
-      if (dataChannel && dataChannel.readyState === "open") {
-        offerFile(e.dataTransfer.files[0]);
-      } else {
+      if (!(dataChannel && dataChannel.readyState === "open")) {
         alert("You need a direct P2P connection (not just the relay) to send files.");
+        return;
       }
+      if (pendingFile) {
+        alert("A file transfer is already in progress -- wait for it to finish (or cancel it) first.");
+        return;
+      }
+      offerFile(e.dataTransfer.files[0]);
     }
   });
 
+  // ---- Progress UI: one bar per transfer, keyed by transferId ---------
+  function transferProgressHtml(transferId, label, msgType) {
+    const cancelFn = msgType === "me" ? "cancelUpload" : "cancelDownload";
+    return `
+      <div class="transfer" id="transfer-${transferId}">
+        <div class="transfer-label">${label}</div>
+        <div class="transfer-bar-track"><div class="transfer-bar-fill" id="transfer-fill-${transferId}"></div></div>
+        <div class="transfer-meta">
+          <span id="transfer-text-${transferId}">Starting...</span>
+          <button onclick="${cancelFn}('${transferId}')">Cancel</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function showTransferProgress(transferId, label, msgType) {
+    addMsg(transferProgressHtml(transferId, label, msgType), msgType);
+  }
+
+  function updateTransferProgress(transferId, done, total, startTime) {
+    const fill = document.getElementById(`transfer-fill-${transferId}`);
+    const text = document.getElementById(`transfer-text-${transferId}`);
+    if (!fill || !text) return;
+    const pct = total ? Math.min(100, (done / total) * 100) : 0;
+    fill.style.width = pct.toFixed(1) + "%";
+    const elapsed = (Date.now() - startTime) / 1000;
+    const speed = elapsed > 0.2 ? done / elapsed : 0;
+    let line = `${formatBytes(done)} / ${formatBytes(total)}`;
+    if (speed > 0) line += ` -- ${formatBytes(speed)}/s`;
+    if (done < total && speed > 0) line += ` -- ~${formatDuration((total - done) / speed)} left`;
+    text.textContent = line;
+  }
+
+  function finishTransferProgress(transferId, finalLabel) {
+    if (!transferId) return;
+    const fill = document.getElementById(`transfer-fill-${transferId}`);
+    const text = document.getElementById(`transfer-text-${transferId}`);
+    if (fill) fill.style.width = "100%";
+    if (text) text.textContent = finalLabel;
+    const container = document.getElementById(`transfer-${transferId}`);
+    const btn = container && container.querySelector("button");
+    if (btn) btn.remove(); // nothing left to cancel once it's done
+  }
+
+  // ---- Sending ----------------------------------------------------------
   function offerFile(file) {
     pendingFile = file;
-    const msg = {
+    uploadTransferId = genTransferId();
+    uploadAbort = false;
+    dataChannel.send(JSON.stringify({
       type: "file-offer",
       name: file.name,
-      size: file.size
-    };
-    dataChannel.send(JSON.stringify(msg));
+      size: file.size,
+      transferId: uploadTransferId
+    }));
     addMsg(`<em>Offered file: ${file.name} (${formatBytes(file.size)}). Waiting for them to accept...</em>`, "me");
   }
 
-  window.acceptFileTransfer = function() {
-    dataChannel.send(JSON.stringify({ type: "file-accept" }));
-    addMsg(`<em>Downloading ${incomingFileInfo.name}...</em>`, "me");
+  window.cancelUpload = function(transferId) {
+    if (transferId !== uploadTransferId) return;
+    uploadAbort = true;
+    if (dataChannel && dataChannel.readyState === "open") {
+      dataChannel.send(JSON.stringify({ type: "file-cancel", transferId }));
+    }
+    finishTransferProgress(transferId, "Cancelled");
   };
 
-  function startFileTransfer() {
+  async function startFileTransfer() {
     if (!pendingFile) return;
-
-    const CHUNK_SIZE = 16384;
+    const file = pendingFile;
+    const dc = dataChannel;
+    const transferId = uploadTransferId;
+    const total = file.size;
     let offset = 0;
+    let lastUiUpdate = 0;
+    const startTime = Date.now();
 
-    addMsg(`<em>Uploading ${pendingFile.name}...</em>`, "sys");
+    dc.bufferedAmountLowThreshold = BUFFER_LOW_WATERMARK;
+    showTransferProgress(transferId, `Sending ${file.name}`, "me");
 
-    const readSlice = (o) => {
-      const slice = pendingFile.slice(offset, o + CHUNK_SIZE);
-      const reader = new FileReader();
+    while (offset < total) {
+      if (uploadAbort || dataChannel !== dc || dc.readyState !== "open") break;
 
-      reader.onload = (e) => {
-        if (dataChannel.readyState !== "open") return;
+      if (dc.bufferedAmount > BUFFER_HIGH_WATERMARK) {
+        await new Promise((resolve) => dc.addEventListener("bufferedamountlow", resolve, { once: true }));
+        continue;
+      }
 
-        dataChannel.send(e.target.result);
-        offset += CHUNK_SIZE;
+      const buf = await file.slice(offset, offset + FILE_CHUNK_SIZE).arrayBuffer();
+      if (uploadAbort || dataChannel !== dc || dc.readyState !== "open") break;
 
-        if (offset < pendingFile.size) {
-          setTimeout(() => readSlice(offset), 0);
-        } else {
-          dataChannel.send(JSON.stringify({ type: "file-done" }));
-          addMsg(`<em>Upload complete: ${pendingFile.name}</em>`, "sys");
-          pendingFile = null;
-        }
-      };
-      reader.readAsArrayBuffer(slice);
-    };
+      dc.send(buf);
+      offset += buf.byteLength;
 
-    readSlice(0);
+      const now = Date.now();
+      if (now - lastUiUpdate > 150 || offset >= total) {
+        lastUiUpdate = now;
+        updateTransferProgress(transferId, offset, total, startTime);
+      }
+    }
+
+    if (uploadAbort) {
+      // cancelUpload() or the file-cancel handler already reported status.
+    } else if (dataChannel === dc && dc.readyState === "open" && offset >= total) {
+      dc.send(JSON.stringify({ type: "file-done", transferId }));
+      finishTransferProgress(transferId, "Sent");
+    } else {
+      finishTransferProgress(transferId, "Upload interrupted -- connection lost");
+    }
+
+    pendingFile = null;
+    uploadTransferId = null;
   }
 
-  function finishFileReceive() {
-    const blob = new Blob(incomingFileData);
-    const url = URL.createObjectURL(blob);
+  // ---- Receiving ----------------------------------------------------------
+  window.acceptFileTransfer = async function(transferId) {
+    if (!incomingFileInfo || incomingFileInfo.transferId !== transferId) return;
+    const info = incomingFileInfo;
+    downloadAbort = false;
+    incomingReceived = 0;
+    incomingStartTime = Date.now();
+    incomingWriter = null;
+    incomingFileData = [];
 
-    const fileHtml = `
-      <strong>File Received!</strong><br>
-      <a href="${url}" download="${incomingFileInfo.name}" style="font-weight: bold; text-decoration: underline; display: inline-block; margin-top: 5px;">
-        Save ${incomingFileInfo.name}
-      </a>
-    `;
-    addMsg(fileHtml, "them");
-    addMsg(`<em>Download complete: ${incomingFileInfo.name}</em>`, "sys");
+    if (typeof window.showSaveFilePicker === "function") {
+      try {
+        const handle = await window.showSaveFilePicker({ suggestedName: info.name });
+        incomingWriter = await handle.createWritable();
+      } catch (e) {
+        if (e && e.name === "AbortError") {
+          addMsg("Download cancelled.", "sys");
+          incomingFileInfo = null;
+          return;
+        }
+        incomingWriter = null; // API refused for some other reason -- fall back to in-memory
+      }
+    }
 
+    dataChannel.send(JSON.stringify({ type: "file-accept", transferId }));
+    showTransferProgress(transferId, `Receiving ${info.name}`, "them");
+  };
+
+  window.cancelDownload = function(transferId) {
+    if (!incomingFileInfo || incomingFileInfo.transferId !== transferId) return;
+    downloadAbort = true;
+    if (dataChannel && dataChannel.readyState === "open") {
+      dataChannel.send(JSON.stringify({ type: "file-cancel", transferId }));
+    }
+    if (incomingWriter) { try { incomingWriter.abort(); } catch (e) {} incomingWriter = null; }
+    incomingFileData = [];
+    finishTransferProgress(transferId, "Cancelled");
+    incomingFileInfo = null;
+  };
+
+  async function finishFileReceive() {
+    const info = incomingFileInfo;
+    if (!info) return;
+
+    if (incomingWriter) {
+      try {
+        await incomingWriter.close();
+        addMsg(`<strong>File saved:</strong> ${info.name}`, "them");
+      } catch (e) {
+        addMsg(`Something went wrong saving ${info.name}: ${e && e.message ? e.message : e}`, "sys");
+      }
+      incomingWriter = null;
+    } else {
+      const blob = new Blob(incomingFileData);
+      const url = URL.createObjectURL(blob);
+      const fileHtml = `
+        <strong>File Received!</strong><br>
+        <a href="${url}" download="${info.name}" style="font-weight: bold; text-decoration: underline; display: inline-block; margin-top: 5px;">
+          Save ${info.name}
+        </a>
+      `;
+      addMsg(fileHtml, "them");
+    }
+
+    finishTransferProgress(info.transferId, "Received");
     incomingFileInfo = null;
     incomingFileData = [];
   }
