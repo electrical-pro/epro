@@ -2223,7 +2223,7 @@ const app = {
       this.logConn('WS open' + (this.isCfMode ? ' (via CF bridge)' : ''));
       clearTimeout(this.wsInitTimeout); // Prevent REST from triggering if it hasn't yet
       this.stopRESTFallback();          // Stop REST if it was already running
-      this.setConnected(true, this.isCfMode ? 'CF WS Mode' : 'WS Live');
+      this.setConnected(true, this.isCfMode ? 'CF Mode' : 'WS Live');
       this.armWsWatchdog(); // covers the case where the ESP never even sends the first push
 
       // Direct-connection mode relies on the ESP pushing the first snapshot
