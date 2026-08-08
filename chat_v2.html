@@ -774,6 +774,15 @@
     audioTransceiver = transceivers.find(t => t.receiver.track?.kind === "audio");
     videoTransceiver = transceivers.find(t => t.receiver.track?.kind === "video");
 
+    // A transceiver auto-created by processing a remote offer defaults to
+    // "recvonly" -- the browser has no way to know we intend to send too
+    // until we say so. Left alone, the answer we're about to generate
+    // would lock in "we only receive", and our video would never actually
+    // leave this side even though replaceTrack() succeeds in JS. Force
+    // both to sendrecv so the answer negotiates a real bidirectional pipe.
+    if (audioTransceiver) audioTransceiver.direction = "sendrecv";
+    if (videoTransceiver) videoTransceiver.direction = "sendrecv";
+
     if (videoEnabled && localStream) await attachLocalMediaTracks();
     if (pc !== targetPc) return;
 
