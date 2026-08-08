@@ -259,10 +259,12 @@
     <video id="remoteVideo" class="hidden" autoplay playsinline style="flex: 1; min-width: 0; border-radius: 8px; background: #000;"></video>
   </div>
 
-  <p class="sys" style="margin-top: 0;">Drag and drop files here to send them! (needs a direct P2P connection)</p>
+  <p class="sys" style="margin-top: 0;">Drag and drop files here or use the attach button to send them! (needs a direct P2P connection)</p>
 
   <div id="chatBox"></div>
   <div style="display: flex; gap: 10px;">
+    <input type="file" id="fileInput" class="hidden" onchange="handleFileSelect(event)">
+    <button onclick="document.getElementById('fileInput').click()" style="padding: 10px; background: var(--panel-2); border: 1px solid var(--border); color: var(--text);" title="Attach File">📎</button>
     <input type="text" id="msgInput" placeholder="Type a message..." style="flex: 1;" onkeypress="if(event.key === 'Enter') sendMsg()">
     <button onclick="sendMsg()">Send</button>
   </div>
@@ -284,12 +286,6 @@
   let reconnectAttempts = 0;
   let reconnectTimer = null;
 
-  // A "session" is one attempt by the host at a fresh RTCPeerConnection.
-  // Every offer carries the host's current session id; the joiner only
-  // ever treats an offer as brand new (rebuilding its own peer connection
-  // to match) when the session id changes. This is what makes recovery
-  // correct regardless of which side dropped or reloaded, without relying
-  // on guessing from timing.
   let hostSessionId = null;   // set by the host, echoed back by the answer
   let appliedSess = null;     // last session id the joiner has answered
 
@@ -314,11 +310,6 @@
   let incomingStartTime = 0;
   let downloadAbort = false;
 
-  // 16KB per DataChannel message -- the one chunk size that's safe across
-  // every browser's SCTP implementation. bufferedAmount watermarks give us
-  // real backpressure: without them, blasting reads at a multi-GB file
-  // faster than the network can drain them just piles the whole thing up
-  // in the browser's send buffer.
   const FILE_CHUNK_SIZE = 16384;
   const BUFFER_HIGH_WATERMARK = 1024 * 1024;
   const BUFFER_LOW_WATERMARK = 256 * 1024;
@@ -329,23 +320,6 @@
   let localStream = null;
   let videoEnabled = false;
 
-  // ---------------------------------------------------------------------
-  // Heartbeat: proof that the OTHER PERSON's browser is actually there,
-  // as opposed to "my signaling socket happens to be open" or "my
-  // RTCPeerConnection object says connected". Every second we send a tiny
-  // {type:"heartbeat", video: <our current camera state>} -- over the P2P
-  // data channel when it's open (that's the more trustworthy, lowest-
-  // latency path), falling back to the WS relay otherwise. Whichever path
-  // last delivered one wins for display purposes. If nothing arrives for
-  // HEARTBEAT_TIMEOUT_MS the peer badge goes red, regardless of what the
-  // signaling/P2P badges (which only describe OUR OWN link state) say.
-  //
-  // Piggybacking our video flag on every beat also makes video-state
-  // self-healing: if a "video-state" message ever gets lost (e.g. right
-  // in the middle of a renegotiation), the next heartbeat re-syncs both
-  // sides' start/stop button within a second instead of leaving them
-  // stuck out of sync.
-  // ---------------------------------------------------------------------
   const HEARTBEAT_INTERVAL_MS = 1000;
   const HEARTBEAT_TIMEOUT_MS = 3000;
   let heartbeatTimer = null;
@@ -445,13 +419,6 @@
     btn.classList.toggle("active", videoEnabled);
   };
 
-  // ---------------------------------------------------------------------
-  // Announce loop: re-sends whatever `pendingAnnounce` currently is every
-  // 1.5s until cleared. Used for the host re-broadcasting its offer, and
-  // for the joiner re-broadcasting either "hello" (looking for a host) or
-  // its answer -- all driven by the same simple, uniform mechanism so
-  // nothing is ever just sent once and hoped for.
-  // ---------------------------------------------------------------------
   function setAnnounce(fn) {
     pendingAnnounce = fn;
     clearInterval(announceTimer);
@@ -462,14 +429,6 @@
     }
   }
 
-  // ---------------------------------------------------------------------
-  // Signaling: a WebSocket relay that broadcasts each message to every
-  // OTHER connected client (never back to the sender), with no storage or
-  // replay. Every message carries a `room` field so peers can tell "for
-  // me" apart from "for someone else" sharing the same relay. The same
-  // socket also carries plain chat text, used as a fallback whenever the
-  // direct P2P data channel isn't (yet, or isn't currently) open.
-  // ---------------------------------------------------------------------
   const getSignalingUrl = () => {
     const params = new URLSearchParams(window.location.search);
     let sig = params.get("signaling");
@@ -508,18 +467,12 @@
     }
   }
 
-  // Records a beat from the peer, no matter which transport it rode in on,
-  // and immediately refreshes the badge so the "online (P2P)" / "online
-  // (relay)" label always reflects the most recent delivery path.
   function recordHeartbeat(via) {
     lastPeerHeartbeat = Date.now();
     lastHeartbeatVia = via;
     updatePeerBadge();
   }
 
-  // P2P first (more direct, lower latency, and proves the actual media
-  // path is alive) -- WS relay only as a fallback when there's no open
-  // data channel to ride on.
   function sendHeartbeat() {
     const payload = { type: "heartbeat", video: videoEnabled };
     if (dataChannel && dataChannel.readyState === "open") {
@@ -556,8 +509,6 @@
     ws.addEventListener("open", () => {
       reconnectAttempts = 0;
       updateWsBadge("live");
-      // Don't wait for the next scheduled tick to resume whatever we were
-      // mid-way through announcing.
       if (pendingAnnounce) pendingAnnounce();
     });
 
@@ -578,8 +529,6 @@
     reconnectTimer = setTimeout(openSignalingSocket, delay);
   }
 
-  // Kicks off the signaling connection and resolves once it's open the
-  // first time (rejects if there's no ?signaling= param at all).
   const connectSignaling = () => {
     return new Promise((resolve, reject) => {
       signalingUrl = getSignalingUrl();
@@ -602,9 +551,6 @@
     });
   };
 
-  // ---------------------------------------------------------------------
-  // WebRTC peer connection lifecycle
-  // ---------------------------------------------------------------------
   const setupPeerConnection = (isHost) => {
     const myPc = new RTCPeerConnection(iceServers);
     pc = myPc;
@@ -627,8 +573,6 @@
       } else if (state === "disconnected") {
         updateP2pBadge("failed");
         clearTimeout(watchdogTimer);
-        // Brief network blips can self-heal -- give it a few seconds
-        // before tearing everything down and starting over.
         watchdogTimer = setTimeout(() => {
           if (pc === myPc && myPc.connectionState !== "connected") triggerReconnect(myPc);
         }, 4000);
@@ -642,18 +586,14 @@
       if (!remoteVideo.srcObject) remoteVideo.srcObject = new MediaStream();
       remoteVideo.srcObject.addTrack(track);
       
-      // Force the video element to recognize the newly added track (fixes Safari/Chrome bugs)
       remoteVideo.srcObject = remoteVideo.srcObject;
       remoteVideo.play().catch(() => {});
     };
 
     if (isHost) {
-      // Always negotiate bi-directional audio/video pipes up front
       audioTransceiver = myPc.addTransceiver("audio", { direction: "sendrecv" });
       videoTransceiver = myPc.addTransceiver("video", { direction: "sendrecv" });
 
-      // FIX: The host created these transceivers, so 'ontrack' won't fire for them.
-      // We must manually attach the synchronously created receiver tracks right now.
       const remoteVideo = document.getElementById("remoteVideo");
       if (!remoteVideo.srcObject) remoteVideo.srcObject = new MediaStream();
       remoteVideo.srcObject.addTrack(audioTransceiver.receiver.track);
@@ -669,10 +609,6 @@
     if (inProgress) return;
 
     if (role === "host") {
-      // Only worth rebuilding + re-broadcasting our offer if a heartbeat
-      // (over either transport) proves someone is still actually in the
-      // room to receive it -- otherwise go quiet and wait for a fresh
-      // "hello" instead of blasting SDP into an empty room every 1.5s.
       const peerRecentlySeen = lastPeerHeartbeat && (Date.now() - lastPeerHeartbeat < HEARTBEAT_TIMEOUT_MS);
       if (peerRecentlySeen) {
         addMsg(everConnected ? "Direct P2P link lost -- reconnecting..." : "Still trying to establish a direct link...", "sys");
@@ -695,27 +631,21 @@
     row.classList.toggle("hidden", !anyVisible);
   }
 
-  // Whether the peer's camera is currently on, per their own explicit
-  // announcement (see startLocalVideo/stopLocalVideo). Driving the remote
-  // video box off this app-level message -- rather than the browser's
-  // low-level track mute/unmute events, which are unreliable for a
-  // "m-line negotiated sendrecv but no track attached yet" transceiver --
-  // is what makes both the box and the mirror-start actually work.
   let remoteVideoOn = false;
 
   function handleRemoteVideoState(enabled) {
-    if (enabled === remoteVideoOn) return; // already in sync -- also makes this safe to call from every heartbeat
+    if (enabled === remoteVideoOn) return; 
     remoteVideoOn = enabled;
     const remoteVideo = document.getElementById("remoteVideo");
     if (enabled) {
       remoteVideo.classList.remove("hidden");
       updateVideoRowVisibility();
       remoteVideo.play().catch(() => {});
-      if (!videoEnabled) startLocalVideo(); // mirror: they started video, so do we
+      if (!videoEnabled) startLocalVideo(); 
     } else {
       remoteVideo.classList.add("hidden");
       updateVideoRowVisibility();
-      if (videoEnabled) stopLocalVideo(); // mirror: they stopped video, so do we
+      if (videoEnabled) stopLocalVideo(); 
     }
   }
 
@@ -762,10 +692,6 @@
       updateP2pBadge("connected");
       addMsg(everConnected ? "Direct P2P link re-established." : "Direct P2P link established. Chat and files now go peer-to-peer.", "sys");
       everConnected = true;
-      // Our own audio/video tracks were already reattached to the fresh
-      // transceivers before this offer/answer went out (if videoEnabled),
-      // but the peer has no way to know that unless we tell them again --
-      // their remote video box was reset to hidden on their side too.
       if (videoEnabled) dc.send(JSON.stringify({ type: "video-state", enabled: true }));
     };
 
@@ -788,10 +714,10 @@
     dc.onmessage = (event) => {
       if (dataChannel !== dc) return;
       if (event.data instanceof ArrayBuffer) {
-        if (!incomingFileInfo || downloadAbort) return; // stray chunk, no active download
+        if (!incomingFileInfo || downloadAbort) return; 
         incomingReceived += event.data.byteLength;
         if (incomingWriter) {
-          incomingWriter.write(event.data).catch(() => {}); // ordered, queued by the stream itself
+          incomingWriter.write(event.data).catch(() => {}); 
         } else {
           incomingFileData.push(event.data);
         }
@@ -847,23 +773,6 @@
     };
   };
 
-  // ---------------------------------------------------------------------
-  // Host: (re)build a fresh RTCPeerConnection + offer, and keep
-  // re-broadcasting that offer over signaling until an answer for this
-  // exact session comes back. Called on first connect AND every time we
-  // need to recover -- there's only one path, so the host never needs a
-  // manual restart.
-  // ---------------------------------------------------------------------
-  // ---------------------------------------------------------------------
-  // Host: while no one has said "hello" yet (or the peer has gone stale --
-  // see triggerReconnect below), just sit quietly instead of building and
-  // re-broadcasting the offer every 1.5s. The offer carries the full SDP,
-  // which can run into many KB once video m-lines are in play, so blasting
-  // it into a room nobody is listening in is pure waste on the signaling
-  // server. "hello" is tiny and the joiner already announces it on its own
-  // loop the whole time it isn't connected, so we lose nothing by waiting
-  // for one before spending any bandwidth.
-  // ---------------------------------------------------------------------
   function enterHostWaitingState(message) {
     setAnnounce(null);
     inProgress = false;
@@ -912,26 +821,18 @@
   }
 
   async function handleHello() {
-    if (inProgress) return; // already (re)negotiating -- a hello mid-flight is redundant
+    if (inProgress) return; 
     if (everConnected) addMsg("Your friend reconnected -- re-establishing direct link...", "sys");
     establishHostConnection();
   }
 
   async function handleIncomingAnswer(msg) {
-    if (!pc || msg.sess !== hostSessionId) return; // stale / not our current session
-    if (pc.signalingState !== "have-local-offer") return; // already applied
+    if (!pc || msg.sess !== hostSessionId) return; 
+    if (pc.signalingState !== "have-local-offer") return; 
     updateStatus("Answer received, establishing P2P connection...");
     await pc.setRemoteDescription(new RTCSessionDescription({ type: "answer", sdp: msg.sdp }));
   }
 
-  // ---------------------------------------------------------------------
-  // Joiner: announce "hello" until an offer shows up. An offer whose
-  // session id we haven't already answered means either "first offer
-  // ever" or "the host rebuilt" -- either way we build a fresh peer
-  // connection to match it rather than trying to reuse a possibly-stale
-  // one. A repeated offer for a session we've already answered just gets
-  // its answer resent (it means our answer hasn't reached the host yet).
-  // ---------------------------------------------------------------------
   async function establishJoinConnection() {
     inProgress = true;
     clearTimeout(buildTimeoutTimer);
@@ -957,8 +858,6 @@
 
   async function handleIncomingOffer(msg) {
     if (msg.sess === appliedSess) {
-      // Duplicate of an offer we already answered -- our answer likely
-      // hasn't reached the host yet, so just resend it.
       if (localSdp && sdpKind === "answer") sendSignal({ kind: "answer", sdp: localSdp, sess: msg.sess });
       return;
     }
@@ -974,12 +873,6 @@
     audioTransceiver = transceivers.find(t => t.receiver.track?.kind === "audio");
     videoTransceiver = transceivers.find(t => t.receiver.track?.kind === "video");
 
-    // A transceiver auto-created by processing a remote offer defaults to
-    // "recvonly" -- the browser has no way to know we intend to send too
-    // until we say so. Left alone, the answer we're about to generate
-    // would lock in "we only receive", and our video would never actually
-    // leave this side even though replaceTrack() succeeds in JS. Force
-    // both to sendrecv so the answer negotiates a real bidirectional pipe.
     if (audioTransceiver) audioTransceiver.direction = "sendrecv";
     if (videoTransceiver) videoTransceiver.direction = "sendrecv";
 
@@ -1000,17 +893,6 @@
     setAnnounce(() => sendSignal({ kind: "answer", sdp: localSdp, sess: msg.sess }));
   }
 
-  // ---------------------------------------------------------------------
-  // Video: on-demand, either side, any time P2P is up. Audio/video
-  // m-lines are already negotiated from the very first offer (see
-  // setupPeerConnection), so turning this on is just grabbing a stream
-  // and attaching it to the existing transceivers -- no renegotiation,
-  // and the browser only prompts for camera/mic permission once.
-  //
-  // Starting your video also mirror-starts the other side's, driven by
-  // an explicit "video-state" message over the data channel rather than
-  // WebRTC's own track mute/unmute events (see handleRemoteVideoState).
-  // ---------------------------------------------------------------------
   let videoStarting = false;
 
   const announceVideoState = (enabled) => {
@@ -1062,9 +944,6 @@
     await startLocalVideo();
   }
 
-  // ---------------------------------------------------------------------
-  // Setup / room flow
-  // ---------------------------------------------------------------------
   function copyShareUrl() {
     const shareInput = document.getElementById("shareUrl");
     shareInput.select();
@@ -1141,23 +1020,6 @@
     input.value = "";
   }
 
-  // ---------------------------------------------------------------------
-  // File transfer (P2P only)
-  //
-  // Sending: reads the file 16KB at a time and pushes it straight into
-  // the data channel, but only as fast as the channel can actually drain
-  // -- bufferedAmount / bufferedamountlow give real backpressure so a
-  // multi-GB file doesn't just pile up unsent in the browser's own send
-  // buffer. Progress is reported off actual bytes handed to the channel.
-  //
-  // Receiving: if the browser supports the File System Access API, we
-  // stream each incoming chunk straight to a file on disk as it arrives
-  // -- memory use stays flat regardless of file size, which is what
-  // makes multi-GB transfers practical at all. Browsers without that API
-  // (Firefox, Safari) fall back to buffering chunks in memory and
-  // building a Blob at the end, same as before -- fine for small/medium
-  // files, just not for the multi-GB case.
-  // ---------------------------------------------------------------------
   const chatUI = document.getElementById("chatUI");
 
   chatUI.addEventListener("dragover", (e) => {
@@ -1187,7 +1049,24 @@
     }
   });
 
-  // ---- Progress UI: one bar per transfer, keyed by transferId ---------
+  window.handleFileSelect = function(event) {
+    const files = event.target.files;
+    if (files.length > 0) {
+      if (!(dataChannel && dataChannel.readyState === "open")) {
+        alert("You need a direct P2P connection (not just the relay) to send files.");
+        event.target.value = "";
+        return;
+      }
+      if (pendingFile) {
+        alert("A file transfer is already in progress -- wait for it to finish (or cancel it) first.");
+        event.target.value = "";
+        return;
+      }
+      offerFile(files[0]);
+      event.target.value = "";
+    }
+  };
+
   function transferProgressHtml(transferId, label, msgType) {
     const cancelFn = msgType === "me" ? "cancelUpload" : "cancelDownload";
     return `
@@ -1228,10 +1107,9 @@
     if (text) text.textContent = finalLabel;
     const container = document.getElementById(`transfer-${transferId}`);
     const btn = container && container.querySelector("button");
-    if (btn) btn.remove(); // nothing left to cancel once it's done
+    if (btn) btn.remove(); 
   }
 
-  // ---- Sending ----------------------------------------------------------
   function offerFile(file) {
     pendingFile = file;
     uploadTransferId = genTransferId();
@@ -1289,7 +1167,6 @@
     }
 
     if (uploadAbort) {
-      // cancelUpload() or the file-cancel handler already reported status.
     } else if (dataChannel === dc && dc.readyState === "open" && offset >= total) {
       dc.send(JSON.stringify({ type: "file-done", transferId }));
       finishTransferProgress(transferId, "Sent");
@@ -1301,7 +1178,6 @@
     uploadTransferId = null;
   }
 
-  // ---- Receiving ----------------------------------------------------------
   window.acceptFileTransfer = async function(transferId) {
     if (!incomingFileInfo || incomingFileInfo.transferId !== transferId) return;
     const info = incomingFileInfo;
@@ -1321,7 +1197,7 @@
           incomingFileInfo = null;
           return;
         }
-        incomingWriter = null; // API refused for some other reason -- fall back to in-memory
+        incomingWriter = null; 
       }
     }
 
@@ -1347,6 +1223,12 @@
 
     if (incomingWriter) {
       try {
+        // UPDATE: Inject a progress notice before awaiting the final flush to disk.
+        const textElement = document.getElementById(`transfer-text-${info.transferId}`);
+        if (textElement) {
+          textElement.innerHTML = "<span style='color: var(--amber);'>Saving to disk... please wait.</span>";
+        }
+        
         await incomingWriter.close();
         addMsg(`<strong>File saved:</strong> ${info.name}`, "them");
       } catch (e) {
@@ -1384,11 +1266,6 @@
       document.getElementById("roomName").disabled = true;
       document.getElementById("hostBtn").classList.add("hidden");
 
-      // A room link always means "join": connect to signaling, show the
-      // chat screen (relay fallback active), and negotiate P2P in the
-      // background. Works the same on first load and on a page reload --
-      // reload just means a brand new join, and the host (if still
-      // around) self-heals as soon as it hears from us.
       updateStatus(`Invite link detected for room "${roomParam}". Connecting...`);
       joinChat();
     }
