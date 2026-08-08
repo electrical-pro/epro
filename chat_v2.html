@@ -218,6 +218,7 @@
   <div id="connBadges">
     <span id="wsBadge" class="badge state-offline"><span class="dot"></span><span class="label">Signaling: offline</span></span>
     <span id="p2pBadge" class="badge state-offline"><span class="dot"></span><span class="label">P2P: not connected</span></span>
+    <span id="peerBadge" class="badge state-offline"><span class="dot"></span><span class="label">Peer: not connected</span></span>
   </div>
 
   <div id="mediaControls">
@@ -280,6 +281,29 @@
   let audioTransceiver, videoTransceiver;
   let localStream = null;
   let videoEnabled = false;
+
+  // ---------------------------------------------------------------------
+  // Heartbeat: proof that the OTHER PERSON's browser is actually there,
+  // as opposed to "my signaling socket happens to be open" or "my
+  // RTCPeerConnection object says connected". Every second we send a tiny
+  // {type:"heartbeat", video: <our current camera state>} -- over the P2P
+  // data channel when it's open (that's the more trustworthy, lowest-
+  // latency path), falling back to the WS relay otherwise. Whichever path
+  // last delivered one wins for display purposes. If nothing arrives for
+  // HEARTBEAT_TIMEOUT_MS the peer badge goes red, regardless of what the
+  // signaling/P2P badges (which only describe OUR OWN link state) say.
+  //
+  // Piggybacking our video flag on every beat also makes video-state
+  // self-healing: if a "video-state" message ever gets lost (e.g. right
+  // in the middle of a renegotiation), the next heartbeat re-syncs both
+  // sides' start/stop button within a second instead of leaving them
+  // stuck out of sync.
+  // ---------------------------------------------------------------------
+  const HEARTBEAT_INTERVAL_MS = 1000;
+  const HEARTBEAT_TIMEOUT_MS = 3000;
+  let heartbeatTimer = null;
+  let lastPeerHeartbeat = 0;   // Date.now() of the last beat we received
+  let lastHeartbeatVia = null; // "p2p" | "relay"
 
   const APP_NS = "qk7x2v9p";
   const namespacedRoom = (name) => `${APP_NS}:${name}`;
@@ -346,6 +370,19 @@
     setBadge("p2pBadge", state, labels[state] || state);
   };
 
+  const updatePeerBadge = () => {
+    if (!lastPeerHeartbeat) {
+      setBadge("peerBadge", "connecting", "Peer: waiting...");
+      return;
+    }
+    const age = Date.now() - lastPeerHeartbeat;
+    if (age > HEARTBEAT_TIMEOUT_MS) {
+      setBadge("peerBadge", "offline", "Peer: offline");
+    } else {
+      setBadge("peerBadge", "live", `Peer: online (${lastHeartbeatVia === "p2p" ? "P2P" : "relay"})`);
+    }
+  };
+
   const updateVideoBtn = () => {
     const btn = document.getElementById("videoToggleBtn");
     btn.textContent = videoEnabled ? "Stop Video" : "Start Video";
@@ -409,7 +446,46 @@
       handleIncomingOffer(msg);
     } else if (msg.kind === "answer" && role === "host") {
       handleIncomingAnswer(msg);
+    } else if (msg.kind === "heartbeat") {
+      recordHeartbeat("relay");
+      if (typeof msg.video === "boolean") handleRemoteVideoState(msg.video);
     }
+  }
+
+  // Records a beat from the peer, no matter which transport it rode in on,
+  // and immediately refreshes the badge so the "online (P2P)" / "online
+  // (relay)" label always reflects the most recent delivery path.
+  function recordHeartbeat(via) {
+    lastPeerHeartbeat = Date.now();
+    lastHeartbeatVia = via;
+    updatePeerBadge();
+  }
+
+  // P2P first (more direct, lower latency, and proves the actual media
+  // path is alive) -- WS relay only as a fallback when there's no open
+  // data channel to ride on.
+  function sendHeartbeat() {
+    const payload = { type: "heartbeat", video: videoEnabled };
+    if (dataChannel && dataChannel.readyState === "open") {
+      dataChannel.send(JSON.stringify(payload));
+    } else if (ws && ws.readyState === WebSocket.OPEN && room) {
+      sendSignal({ kind: "heartbeat", video: videoEnabled });
+    }
+  }
+
+  function startHeartbeatLoop() {
+    stopHeartbeatLoop();
+    sendHeartbeat();
+    updatePeerBadge();
+    heartbeatTimer = setInterval(() => {
+      sendHeartbeat();
+      updatePeerBadge(); // re-check staleness every tick even if nothing new arrived
+    }, HEARTBEAT_INTERVAL_MS);
+  }
+
+  function stopHeartbeatLoop() {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
   }
 
   function openSignalingSocket() {
@@ -557,6 +633,7 @@
   let remoteVideoOn = false;
 
   function handleRemoteVideoState(enabled) {
+    if (enabled === remoteVideoOn) return; // already in sync -- also makes this safe to call from every heartbeat
     remoteVideoOn = enabled;
     const remoteVideo = document.getElementById("remoteVideo");
     if (enabled) {
@@ -567,6 +644,7 @@
     } else {
       remoteVideo.classList.add("hidden");
       updateVideoRowVisibility();
+      if (videoEnabled) stopLocalVideo(); // mirror: they stopped video, so do we
     }
   }
 
@@ -652,6 +730,10 @@
         }
         else if (msg.type === "video-state") {
           handleRemoteVideoState(msg.enabled);
+        }
+        else if (msg.type === "heartbeat") {
+          recordHeartbeat("p2p");
+          if (typeof msg.video === "boolean") handleRemoteVideoState(msg.video);
         }
         else {
           addMsg(event.data, "them");
@@ -871,6 +953,7 @@
     document.getElementById("roomLabel").textContent = `Room: ${roomName}`;
     if (isHost) document.getElementById("copyLinkBtn").classList.remove("hidden");
     document.getElementById("chatUI").classList.remove("hidden");
+    startHeartbeatLoop();
   }
 
   async function hostChat() {
