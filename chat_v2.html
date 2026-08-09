@@ -332,9 +332,14 @@
   let incomingStartTime = 0;
   let downloadAbort = false;
 
-  const FILE_CHUNK_SIZE = 16384;
-  const BUFFER_HIGH_WATERMARK = 1024 * 1024;
-  const BUFFER_LOW_WATERMARK = 256 * 1024;
+  // Tuned for high-RTT (long-distance) links: throughput over a single reliable
+  // channel is roughly (bytes allowed in flight) / RTT, so on a 250ms transpacific
+  // link a 1MB window caps you around ~4MB/s no matter how fast the actual pipe is.
+  // Bigger chunks + a much bigger buffered-amount window let the browser keep far
+  // more data in flight before we pause and wait for it to drain.
+  const FILE_CHUNK_SIZE = 256 * 1024;         // was 16 KiB -- fewer send() calls, less per-chunk JS overhead
+  const BUFFER_HIGH_WATERMARK = 16 * 1024 * 1024; // was 1 MiB -- allow much more data in flight
+  const BUFFER_LOW_WATERMARK = 4 * 1024 * 1024;   // was 256 KiB -- resume earlier, keep the pipe fed
 
   const genTransferId = () => Math.random().toString(36).slice(2);
 
