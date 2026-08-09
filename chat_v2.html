@@ -27,6 +27,8 @@
     --red: #f0495e;
     --red-soft: rgba(240, 73, 94, 0.14);
     --teal: #22c1b6;
+    --them-1: #4a5578;
+    --them-2: #5b6796;
     --radius-lg: 18px;
     --radius-md: 12px;
     --radius-sm: 9px;
@@ -328,9 +330,9 @@
     border-bottom-right-radius: 4px;
   }
   .msg.them {
-    background: var(--panel-3);
-    border: 1px solid var(--border);
-    color: var(--text);
+    background: linear-gradient(135deg, var(--them-1), var(--them-2));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #f5f6fb;
     margin-right: auto;
     border-bottom-left-radius: 4px;
   }
@@ -357,7 +359,7 @@
     border-radius: 4px;
     overflow: hidden;
   }
-  .msg.them .transfer-bar-track { background: rgba(255, 255, 255, 0.08); }
+  .msg.them .transfer-bar-track { background: rgba(255, 255, 255, 0.22); }
   .msg.me .transfer-bar-track { background: rgba(255, 255, 255, 0.3); }
   .transfer-bar-fill {
     height: 100%;
@@ -897,6 +899,7 @@
     } else {
       remoteVideo.classList.add("hidden");
       updateVideoRowVisibility();
+      if (callMode !== "off") stopCall();
     }
   }
 
