@@ -189,21 +189,6 @@
     padding: 0;
   }
 
-  /* Prevent browsers from pausing audio when video elements are hidden */
-  #videoRow.hidden, video.hidden {
-    display: block !important;
-    position: absolute !important;
-    width: 0 !important;
-    height: 0 !important;
-    min-height: 0 !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    border: none !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
-    overflow: hidden !important;
-  }
-
   #chatUI {
     padding: 16px;
     display: flex;
@@ -292,6 +277,7 @@
   #mediaControls button.active { background: var(--green-soft); color: #a6f0c6; border-color: rgba(47, 217, 128, 0.45); }
 
   #videoRow {
+    display: flex;
     gap: 10px;
     margin: 0;
   }
@@ -304,6 +290,27 @@
     border-radius: var(--radius-md);
     background: #000;
     border: 1px solid var(--border);
+  }
+
+  /* Visually collapse the video row/elements WITHOUT display:none --
+     browsers (esp. mobile) can suspend audio decoding on display:none
+     media elements, which would silently break voice-only calls. */
+  #videoRow.av-hidden {
+    display: block;
+    height: 0;
+    min-height: 0;
+    margin: 0;
+    overflow: hidden;
+  }
+  #videoRow video.av-hidden {
+    display: block;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    aspect-ratio: unset;
+    opacity: 0;
+    pointer-events: none;
+    border: none;
   }
 
   .dropHint {
