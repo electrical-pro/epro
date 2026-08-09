@@ -851,6 +851,7 @@
       remoteVideo.srcObject.addTrack(audioTransceiver.receiver.track);
       remoteVideo.srcObject.addTrack(videoTransceiver.receiver.track);
       remoteVideo.srcObject = remoteVideo.srcObject;
+      remoteVideo.play().catch(() => {});
     }
 
     return myPc;
@@ -895,6 +896,7 @@
     } else if (mode === "audio") {
       remoteVideo.classList.add("hidden");
       updateVideoRowVisibility();
+      remoteVideo.play().catch(() => {});
       if (callMode === "off") startCall("audio");
     } else {
       remoteVideo.classList.add("hidden");
