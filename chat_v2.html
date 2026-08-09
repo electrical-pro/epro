@@ -2,203 +2,373 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0a0b0f">
 <title>P2P WebRTC Chat & File Transfer</title>
 <style>
   :root {
-    --bg: #0e0f13;
-    --panel: #191b21;
-    --panel-2: #14161b;
-    --border: #2a2d36;
-    --text: #e6e7eb;
-    --text-dim: #9aa0ac;
-    --accent: #3b82f6;
-    --accent-hover: #2563eb;
-    --green: #22c55e;
-    --amber: #eab308;
-    --red: #ef4444;
-    --teal: #14b8a6;
+    --bg: #0a0b0f;
+    --panel: #16181f;
+    --panel-2: #1b1e26;
+    --panel-3: #20232c;
+    --border: #282b35;
+    --border-strong: #383c49;
+    --text: #eef0f4;
+    --text-dim: #939aab;
+    --text-faint: #666c7d;
+    --accent: #4f8cff;
+    --accent-hover: #3d78ec;
+    --accent-soft: rgba(79, 140, 255, 0.14);
+    --green: #2fd980;
+    --green-soft: rgba(47, 217, 128, 0.14);
+    --amber: #f4b942;
+    --amber-soft: rgba(244, 185, 66, 0.14);
+    --red: #f0495e;
+    --red-soft: rgba(240, 73, 94, 0.14);
+    --teal: #22c1b6;
+    --radius-lg: 18px;
+    --radius-md: 12px;
+    --radius-sm: 9px;
+    --shadow-card: 0 10px 30px -8px rgba(0, 0, 0, 0.55);
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, system-ui, sans-serif;
   }
+
+  * { box-sizing: border-box; }
+
+  html { -webkit-tap-highlight-color: transparent; }
 
   body {
-    font-family: system-ui, -apple-system, sans-serif;
-    max-width: 600px;
-    margin: 2rem auto;
-    padding: 0 1rem;
-    background-color: var(--bg);
+    font-family: var(--font);
+    max-width: 640px;
+    margin: 0 auto;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+    background: var(--bg);
+    background-image:
+      radial-gradient(700px 320px at 15% -5%, rgba(79, 140, 255, 0.09), transparent 60%),
+      radial-gradient(600px 300px at 100% 0%, rgba(34, 193, 182, 0.07), transparent 55%);
+    background-attachment: fixed;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.45;
+  }
+
+  ::selection { background: var(--accent-soft); }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+
+  .app-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 6px 2px 18px;
+  }
+  .app-header .logo {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    border-radius: 11px;
+    background: linear-gradient(145deg, var(--accent), var(--teal));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 19px;
+    box-shadow: 0 6px 16px -4px rgba(79, 140, 255, 0.45);
+  }
+  .app-header h2 {
+    margin: 0;
+    font-size: 1.15em;
+    font-weight: 700;
+    letter-spacing: -0.01em;
     color: var(--text);
   }
-  h2 { color: var(--text); }
+  .app-header .subtitle {
+    margin: 2px 0 0;
+    font-size: 0.8em;
+    color: var(--text-dim);
+  }
+
+  .card {
+    background: linear-gradient(180deg, var(--panel), var(--panel) 60%, var(--panel-2));
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+  }
 
   .controls {
-    margin-bottom: 15px;
+    margin-bottom: 16px;
     padding: 20px;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 8px;
+  }
+
+  .field-label {
+    font-weight: 600;
+    font-size: 0.78em;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    display: block;
+    margin-bottom: 8px;
   }
 
   input[type="text"] {
-    padding: 10px;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    font-size: 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    font-size: 15px;
+    font-family: var(--font);
     background: var(--panel-2);
     color: var(--text);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+    width: 100%;
   }
-  input[type="text"]:disabled { opacity: 0.6; }
-  input[type="text"]::placeholder { color: var(--text-dim); }
+  input[type="text"]:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+    background: var(--panel-3);
+  }
+  input[type="text"]:disabled { opacity: 0.55; cursor: not-allowed; }
+  input[type="text"]::placeholder { color: var(--text-faint); }
+
+  #roomName { margin-bottom: 16px; }
 
   button {
-    padding: 10px 16px;
+    padding: 11px 18px;
     cursor: pointer;
     background: var(--accent);
-    color: white;
+    color: #fff;
     border: none;
-    border-radius: 4px;
-    font-size: 16px;
-    transition: background 0.2s;
+    border-radius: var(--radius-sm);
+    font-size: 15px;
+    font-weight: 600;
+    font-family: var(--font);
+    transition: background 0.15s, filter 0.15s, transform 0.05s, opacity 0.15s;
+    -webkit-tap-highlight-color: transparent;
   }
   button:hover { background: var(--accent-hover); }
+  button:active { transform: scale(0.97); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  #actionButtons { display: flex; gap: 10px; }
+  #actionButtons button { flex: 1; padding: 13px 16px; }
+
+  #hostBtn { background: var(--panel-3); border: 1px solid var(--border-strong); color: var(--text); }
+  #hostBtn:hover { background: var(--panel-2); border-color: var(--text-faint); }
+
+  #joinBtn { background: var(--green); color: #052b17; }
+  #joinBtn:hover { filter: brightness(1.08); }
 
   .share-box {
-    margin-top: 15px;
-    padding: 12px;
-    background: #12202f;
-    border: 1px solid #234b6e;
-    border-radius: 6px;
+    margin-top: 16px;
+    padding: 14px;
+    background: var(--accent-soft);
+    border: 1px solid rgba(79, 140, 255, 0.35);
+    border-radius: var(--radius-md);
   }
-  .share-box label { color: #7fb3e8; }
+  .share-box label { color: #a9c6ff; }
+  .share-row { display: flex; gap: 8px; }
+  .share-row input[type="text"] { flex: 1; font-size: 13.5px; min-width: 0; }
+  .share-row button {
+    background: var(--teal);
+    color: #04241f;
+    padding: 0 14px;
+    font-size: 13.5px;
+    flex-shrink: 0;
+  }
+  .share-row button:hover { filter: brightness(1.08); }
+
+  .status-text {
+    text-align: left;
+    margin: 16px 0 0;
+    padding: 0;
+  }
 
   #chatUI {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    padding: 15px;
-    border-radius: 8px;
-    transition: background 0.3s, border-color 0.3s;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    transition: background 0.25s, border-color 0.25s;
   }
 
   #chatUI.dragover {
-    background: #16233a;
+    background: linear-gradient(180deg, rgba(79, 140, 255, 0.08), var(--panel-2));
     border: 2px dashed var(--accent);
   }
+
+  .roomBar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85em;
+    color: var(--text-dim);
+  }
+  #roomLabel {
+    font-weight: 600;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .roomBar button {
+    font-size: 12.5px;
+    padding: 7px 12px;
+    background: var(--panel-3);
+    color: var(--teal);
+    border: 1px solid var(--border-strong);
+    flex-shrink: 0;
+  }
+  .roomBar button:hover { background: var(--panel-2); border-color: var(--teal); }
 
   #connBadges {
     display: flex;
     gap: 8px;
-    margin-bottom: 10px;
     flex-wrap: wrap;
   }
   .badge {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 0.78em;
-    padding: 4px 10px;
-    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    padding: 5px 10px 5px 8px;
+    border-radius: 20px;
     background: var(--panel-2);
     border: 1px solid var(--border);
     color: var(--text-dim);
-    font-weight: 600;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
   }
   .badge .dot {
-    width: 8px;
-    height: 8px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
-    background: #666;
+    background: var(--text-faint);
     flex-shrink: 0;
+    box-shadow: 0 0 0 0 transparent;
   }
-  .badge.state-live .dot, .badge.state-connected .dot { background: var(--green); }
-  .badge.state-connecting .dot { background: var(--amber); }
+  .badge.state-live, .badge.state-connected { background: var(--green-soft); border-color: rgba(47, 217, 128, 0.3); color: #a6f0c6; }
+  .badge.state-live .dot, .badge.state-connected .dot { background: var(--green); box-shadow: 0 0 8px 0 rgba(47, 217, 128, 0.7); }
+  .badge.state-connecting { background: var(--amber-soft); border-color: rgba(244, 185, 66, 0.3); color: #f6d493; }
+  .badge.state-connecting .dot { background: var(--amber); animation: pulse 1.3s ease-in-out infinite; }
+  .badge.state-offline, .badge.state-failed { background: var(--red-soft); border-color: rgba(240, 73, 94, 0.3); color: #f6aab2; }
   .badge.state-offline .dot, .badge.state-failed .dot { background: var(--red); }
 
-  #mediaControls { margin-bottom: 12px; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.55; transform: scale(0.85); }
+  }
+
+  #mediaControls { display: flex; gap: 8px; flex-wrap: wrap; }
   #mediaControls button {
-    font-size: 13px;
-    padding: 6px 12px;
-    background: var(--panel-2);
-    border: 1px solid var(--border);
+    font-size: 13.5px;
+    padding: 8px 14px;
+    background: var(--panel-3);
+    border: 1px solid var(--border-strong);
     color: var(--text);
   }
-  #mediaControls button:hover { background: #21242c; }
-  #mediaControls button.active { background: var(--green); color: #06210f; border-color: var(--green); }
+  #mediaControls button:hover { background: var(--panel-2); border-color: var(--text-faint); }
+  #mediaControls button.active { background: var(--green-soft); color: #a6f0c6; border-color: rgba(47, 217, 128, 0.45); }
 
-  .roomBar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-    font-size: 0.85em;
-    color: var(--text-dim);
+  #videoRow {
+    gap: 10px;
+    margin: 0;
   }
-  .roomBar button {
-    font-size: 12px;
-    padding: 5px 10px;
-    background: var(--teal);
-    color: #04211d;
+  #videoRow video {
+    flex: 1;
+    min-width: 0;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border-radius: var(--radius-md);
+    background: #000;
+    border: 1px solid var(--border);
+  }
+
+  .dropHint {
+    text-align: center;
+    color: var(--text-faint);
+    font-size: 0.78em;
+    margin: 0;
+    padding: 8px 10px;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
   }
 
   #chatBox {
     border: 1px solid var(--border);
     height: 350px;
     overflow-y: auto;
-    padding: 15px;
-    margin-bottom: 15px;
+    padding: 14px;
     background: var(--panel-2);
-    border-radius: 4px;
+    border-radius: var(--radius-md);
     display: flex;
     flex-direction: column;
+    gap: 2px;
   }
 
   .msg {
-    margin: 5px 0;
+    margin: 4px 0;
     padding: 10px 14px;
     border-radius: 18px;
     width: fit-content;
-    max-width: 75%;
+    max-width: 82%;
     word-wrap: break-word;
+    font-size: 14.5px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   }
-  .me {
-    background: var(--accent);
+  .msg.me {
+    background: linear-gradient(135deg, var(--accent), var(--accent-hover));
     color: white;
     margin-left: auto;
     border-bottom-right-radius: 4px;
   }
-  .them {
-    background: #262932;
+  .msg.them {
+    background: var(--panel-3);
+    border: 1px solid var(--border);
     color: var(--text);
     margin-right: auto;
     border-bottom-left-radius: 4px;
   }
-  .sys {
+  .msg.sys {
+    background: transparent;
+    box-shadow: none;
     text-align: center;
-    color: var(--text-dim);
+    color: var(--text-faint);
     font-size: 0.85em;
-    margin: 10px auto;
+    margin: 8px auto;
+    max-width: 95%;
   }
   .via-relay {
     opacity: 0.8;
     font-size: 0.8em;
     font-weight: normal;
   }
-  .transfer { min-width: 230px; }
-  .transfer-label { font-size: 0.85em; font-weight: 600; margin-bottom: 6px; }
+
+  .transfer { min-width: 220px; }
+  .transfer-label { font-size: 0.85em; font-weight: 600; margin-bottom: 7px; }
   .transfer-bar-track {
-    height: 8px;
-    background: rgba(255,255,255,0.15);
+    height: 7px;
+    background: rgba(255, 255, 255, 0.12);
     border-radius: 4px;
     overflow: hidden;
   }
-  .me .transfer-bar-track { background: rgba(255,255,255,0.3); }
+  .msg.them .transfer-bar-track { background: rgba(255, 255, 255, 0.08); }
+  .msg.me .transfer-bar-track { background: rgba(255, 255, 255, 0.3); }
   .transfer-bar-fill {
     height: 100%;
     background: var(--teal);
     width: 0%;
+    transition: width 0.15s ease-out;
   }
   .transfer-meta {
     font-size: 0.78em;
-    opacity: 0.85;
-    margin-top: 5px;
+    opacity: 0.9;
+    margin-top: 6px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -206,61 +376,107 @@
   }
   .transfer-meta button {
     font-size: 0.75em;
-    padding: 2px 9px;
+    padding: 3px 10px;
     background: var(--red);
     flex-shrink: 0;
   }
-  a { color: #7fb3e8; }
+  .transfer-meta button:hover { filter: brightness(1.1); }
+
+  .msg .download-btn {
+    margin-top: 8px;
+    padding: 7px 13px;
+    font-size: 13px;
+    background: var(--green);
+    color: #052b17;
+  }
+  .msg .download-btn:hover { filter: brightness(1.08); }
+  .saving-note { color: var(--amber); }
+
+  a { color: #8fb8f5; }
   .hidden { display: none !important; }
 
-  /* Input row flexbox styling */
   .chat-input-row {
     display: flex;
-    gap: 10px;
+    gap: 8px;
     align-items: center;
   }
-  
+
+  .icon-btn {
+    padding: 0;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    border-radius: 50%;
+    background: var(--panel-3);
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .icon-btn:hover { background: var(--panel-2); border-color: var(--text-faint); }
+
+  .chat-input-row input[type="text"] {
+    flex: 1;
+    min-width: 0;
+    border-radius: 22px;
+    padding: 12px 16px;
+  }
+
+  .send-btn {
+    border-radius: 22px;
+    padding: 0 22px;
+    height: 44px;
+    flex-shrink: 0;
+  }
+
   /* Mobile responsiveness adjustments */
   @media (max-width: 480px) {
-    .chat-input-row {
-      gap: 6px;
-    }
-    button {
-      padding: 8px 12px;
-      font-size: 14px;
-    }
-    input[type="text"] {
-      font-size: 14px;
-      padding: 8px;
-    }
+    body { padding-left: 10px; padding-right: 10px; }
+    .controls, #chatUI { padding: 14px; }
+    #chatBox { height: min(50vh, 420px); padding: 10px; }
+    .msg { max-width: 88%; font-size: 14px; }
+    #videoRow { flex-direction: column; }
+    #videoRow video { aspect-ratio: 16 / 10; }
+    .app-header .logo { width: 34px; height: 34px; font-size: 16px; border-radius: 9px; }
+    .app-header h2 { font-size: 1.02em; }
+    button { font-size: 14.5px; }
   }
 </style>
 </head>
 <body>
 
-<h2>Secure P2P Chat</h2>
+<div class="app-header">
+  <div class="logo">🔒</div>
+  <div>
+    <h2>Secure P2P Chat</h2>
+    <p class="subtitle">Direct WebRTC connection · nothing stored on a server</p>
+  </div>
+</div>
 
-<div class="controls" id="setupUI">
-  <label style="font-weight: bold; display: block; margin-bottom: 8px;">Room Name / ID:</label>
-  <input type="text" id="roomName" placeholder="super-secret-chat-992" style="width: 100%; box-sizing: border-box; margin-bottom: 15px;">
+<div class="controls card" id="setupUI">
+  <label class="field-label">Room Name / ID</label>
+  <input type="text" id="roomName" placeholder="super-secret-chat-992">
 
-  <div id="actionButtons" style="display: flex; gap: 10px;">
-    <button id="hostBtn" onclick="hostChat()" style="flex: 1;">1. Host Chat</button>
-    <button id="joinBtn" onclick="joinChat()" style="flex: 1; background: var(--green); color: #06210f;">2. Join Chat</button>
+  <div id="actionButtons">
+    <button id="hostBtn" onclick="hostChat()">1. Host Chat</button>
+    <button id="joinBtn" onclick="joinChat()">2. Join Chat</button>
   </div>
 
   <div id="shareContainer" class="share-box hidden">
-    <label style="font-size: 0.9em; font-weight: bold; display: block; margin-bottom: 5px;">Share this link with your friend:</label>
-    <div style="display: flex; gap: 8px;">
-      <input type="text" id="shareUrl" readonly style="flex: 1; font-size: 14px; min-width: 0;">
-      <button onclick="copyShareUrl()" style="background: var(--teal); color: #04211d; padding: 8px 12px; font-size: 14px;">Copy Link</button>
+    <label style="font-size: 0.9em; font-weight: bold; display: block; margin-bottom: 8px;">Share this link with your friend:</label>
+    <div class="share-row">
+      <input type="text" id="shareUrl" readonly>
+      <button onclick="copyShareUrl()">Copy Link</button>
     </div>
   </div>
 
-  <p id="status" class="sys" style="text-align: left; margin-top: 15px;">Status: Waiting for input...</p>
+  <p id="status" class="sys status-text">Status: Waiting for input...</p>
 </div>
 
-<div id="chatUI" class="hidden">
+<div id="chatUI" class="card hidden">
   <div class="roomBar">
     <span id="roomLabel"></span>
     <button id="copyLinkBtn" class="hidden" onclick="copyShareUrl()">Copy Invite Link</button>
@@ -273,22 +489,23 @@
   </div>
 
   <div id="mediaControls">
+    <button id="voiceToggleBtn" onclick="toggleVoice()">Start Voice Call</button>
     <button id="videoToggleBtn" onclick="toggleVideo()">Start Video</button>
   </div>
 
-  <div id="videoRow" class="hidden" style="display: flex; gap: 10px; margin-bottom: 15px;">
-    <video id="localVideo" class="hidden" autoplay muted playsinline style="flex: 1; min-width: 0; border-radius: 8px; background: #000;"></video>
-    <video id="remoteVideo" class="hidden" autoplay playsinline style="flex: 1; min-width: 0; border-radius: 8px; background: #000;"></video>
+  <div id="videoRow" class="hidden" style="display: flex;">
+    <video id="localVideo" class="hidden" autoplay muted playsinline></video>
+    <video id="remoteVideo" class="hidden" autoplay playsinline></video>
   </div>
 
-  <p class="sys" style="margin-top: 0;">Drag and drop files here or use the attach button to send them! (needs a direct P2P connection)</p>
+  <p class="dropHint">📎 Drag and drop files here, or use the attach button (needs a direct P2P connection)</p>
 
   <div id="chatBox"></div>
   <div class="chat-input-row">
     <input type="file" id="fileInput" class="hidden" onchange="handleFileSelect(event)">
-    <button onclick="document.getElementById('fileInput').click()" style="padding: 10px; background: var(--panel-2); border: 1px solid var(--border); color: var(--text);" title="Attach File">📎</button>
-    <input type="text" id="msgInput" placeholder="Type a message..." style="flex: 1; min-width: 0;" onkeypress="if(event.key === 'Enter') sendMsg()">
-    <button onclick="sendMsg()">Send</button>
+    <button class="icon-btn" onclick="document.getElementById('fileInput').click()" title="Attach File">📎</button>
+    <input type="text" id="msgInput" placeholder="Type a message..." onkeypress="if(event.key === 'Enter') sendMsg()">
+    <button class="send-btn" onclick="sendMsg()">Send</button>
   </div>
 </div>
 
@@ -340,7 +557,9 @@
 
   let audioTransceiver, videoTransceiver;
   let localStream = null;
-  let videoEnabled = false;
+  let callMode = "off";       // "off" | "audio" | "video" -- our own outgoing call state
+  let callStarting = false;
+  let remoteCallMode = "off"; // "off" | "audio" | "video" -- peer's reported call state
 
   const HEARTBEAT_INTERVAL_MS = 1000;
   const HEARTBEAT_TIMEOUT_MS = 3000;
@@ -394,8 +613,6 @@
     return `${h}h ${rm}m`;
   }
 
-  const getRandomSuffix = () => Math.random().toString(36).substring(2, 8);
-
   const setBadge = (id, state, label) => {
     const el = document.getElementById(id);
     el.className = "badge state-" + state;
@@ -435,10 +652,21 @@
     }
   };
 
-  const updateVideoBtn = () => {
-    const btn = document.getElementById("videoToggleBtn");
-    btn.textContent = videoEnabled ? "Stop Video" : "Start Video";
-    btn.classList.toggle("active", videoEnabled);
+  const updateCallButtons = () => {
+    const voiceBtn = document.getElementById("voiceToggleBtn");
+    const videoBtn = document.getElementById("videoToggleBtn");
+    if (callMode === "video") {
+      voiceBtn.textContent = "Switch to Voice Only";
+      videoBtn.textContent = "Stop Video";
+    } else if (callMode === "audio") {
+      voiceBtn.textContent = "End Voice Call";
+      videoBtn.textContent = "Switch to Video";
+    } else {
+      voiceBtn.textContent = "Start Voice Call";
+      videoBtn.textContent = "Start Video";
+    }
+    voiceBtn.classList.toggle("active", callMode === "audio");
+    videoBtn.classList.toggle("active", callMode === "video");
   };
 
   function setAnnounce(fn) {
@@ -485,7 +713,7 @@
       handleIncomingAnswer(msg);
     } else if (msg.kind === "heartbeat") {
       recordHeartbeat("relay");
-      if (typeof msg.video === "boolean") handleRemoteVideoState(msg.video);
+      if (typeof msg.mode === "string") handleRemoteCallState(msg.mode);
     }
   }
 
@@ -496,11 +724,11 @@
   }
 
   function sendHeartbeat() {
-    const payload = { type: "heartbeat", video: videoEnabled };
+    const payload = { type: "heartbeat", mode: callMode };
     if (dataChannel && dataChannel.readyState === "open") {
       dataChannel.send(JSON.stringify(payload));
     } else if (ws && ws.readyState === WebSocket.OPEN && room) {
-      sendSignal({ kind: "heartbeat", video: videoEnabled });
+      sendSignal({ kind: "heartbeat", mode: callMode });
     }
   }
 
@@ -653,21 +881,22 @@
     row.classList.toggle("hidden", !anyVisible);
   }
 
-  let remoteVideoOn = false;
-
-  function handleRemoteVideoState(enabled) {
-    if (enabled === remoteVideoOn) return; 
-    remoteVideoOn = enabled;
+  function handleRemoteCallState(mode) {
+    if (mode === remoteCallMode) return;
+    remoteCallMode = mode;
     const remoteVideo = document.getElementById("remoteVideo");
-    if (enabled) {
+    if (mode === "video") {
       remoteVideo.classList.remove("hidden");
       updateVideoRowVisibility();
       remoteVideo.play().catch(() => {});
-      if (!videoEnabled) startLocalVideo(); 
+      if (callMode === "off") startCall("video");
+    } else if (mode === "audio") {
+      remoteVideo.classList.add("hidden");
+      updateVideoRowVisibility();
+      if (callMode === "off") startCall("audio");
     } else {
       remoteVideo.classList.add("hidden");
       updateVideoRowVisibility();
-      if (videoEnabled) stopLocalVideo(); 
     }
   }
 
@@ -675,7 +904,7 @@
     const rv = document.getElementById("remoteVideo");
     rv.srcObject = null;
     rv.classList.add("hidden");
-    remoteVideoOn = false;
+    remoteCallMode = "off";
     updateVideoRowVisibility();
   }
 
@@ -684,10 +913,15 @@
     const audioTrack = localStream.getAudioTracks()[0];
     const videoTrack = localStream.getVideoTracks()[0];
     if (audioTrack && audioTransceiver) { try { await audioTransceiver.sender.replaceTrack(audioTrack); } catch (e) {} }
-    if (videoTrack && videoTransceiver) { try { await videoTransceiver.sender.replaceTrack(videoTrack); } catch (e) {} }
+    if (videoTransceiver) { try { await videoTransceiver.sender.replaceTrack(videoTrack || null); } catch (e) {} }
     const localVideo = document.getElementById("localVideo");
-    localVideo.srcObject = localStream;
-    localVideo.classList.remove("hidden");
+    if (videoTrack) {
+      localVideo.srcObject = localStream;
+      localVideo.classList.remove("hidden");
+    } else {
+      localVideo.srcObject = null;
+      localVideo.classList.add("hidden");
+    }
     updateVideoRowVisibility();
   }
 
@@ -714,7 +948,7 @@
       updateP2pBadge("connected");
       addMsg(everConnected ? "Direct P2P link re-established." : "Direct P2P link established. Chat and files now go peer-to-peer.", "sys");
       everConnected = true;
-      if (videoEnabled) dc.send(JSON.stringify({ type: "video-state", enabled: true }));
+      if (callMode !== "off") dc.send(JSON.stringify({ type: "call-state", mode: callMode }));
     };
 
     dc.onclose = () => {
@@ -779,12 +1013,12 @@
             incomingFileInfo = null;
           }
         }
-        else if (msg.type === "video-state") {
-          handleRemoteVideoState(msg.enabled);
+        else if (msg.type === "call-state") {
+          handleRemoteCallState(msg.mode);
         }
         else if (msg.type === "heartbeat") {
           recordHeartbeat("p2p");
-          if (typeof msg.video === "boolean") handleRemoteVideoState(msg.video);
+          if (typeof msg.mode === "string") handleRemoteCallState(msg.mode);
         }
         else {
           addMsg(event.data, "them");
@@ -823,7 +1057,7 @@
     dataChannel = dc;
     setupDataChannel(dc);
 
-    if (videoEnabled && localStream) await attachLocalMediaTracks();
+    if (callMode !== "off" && localStream) await attachLocalMediaTracks();
     if (pc !== myPc) return;
 
     const offer = await myPc.createOffer();
@@ -898,7 +1132,7 @@
     if (audioTransceiver) audioTransceiver.direction = "sendrecv";
     if (videoTransceiver) videoTransceiver.direction = "sendrecv";
 
-    if (videoEnabled && localStream) await attachLocalMediaTracks();
+    if (callMode !== "off" && localStream) await attachLocalMediaTracks();
     if (pc !== targetPc) return;
 
     const answer = await targetPc.createAnswer();
@@ -915,55 +1149,61 @@
     setAnnounce(() => sendSignal({ kind: "answer", sdp: localSdp, sess: msg.sess }));
   }
 
-  let videoStarting = false;
-
-  const announceVideoState = (enabled) => {
+  const announceCallState = (mode) => {
     if (dataChannel && dataChannel.readyState === "open") {
-      dataChannel.send(JSON.stringify({ type: "video-state", enabled }));
+      dataChannel.send(JSON.stringify({ type: "call-state", mode }));
     }
   };
 
-  async function startLocalVideo() {
-    if (videoEnabled || videoStarting) return;
-    if (!pc || pc.connectionState !== "connected") return;
-    videoStarting = true;
-    try {
-      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    } catch (e) {
-      addMsg("Camera/mic access was denied or unavailable.", "sys");
-      videoStarting = false;
+  async function startCall(mode) {
+    if (callMode === mode || callStarting) return;
+    if (!pc || pc.connectionState !== "connected") {
+      addMsg(`${mode === "video" ? "Video" : "Voice"} calls need an active direct P2P connection -- still working on that.`, "sys");
       return;
     }
-    videoEnabled = true;
-    videoStarting = false;
+    callStarting = true;
+    if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: mode === "video" });
+    } catch (e) {
+      addMsg("Microphone/camera access was denied or unavailable.", "sys");
+      callStarting = false;
+      return;
+    }
+    callMode = mode;
+    callStarting = false;
     await attachLocalMediaTracks();
-    updateVideoBtn();
-    announceVideoState(true);
+    updateCallButtons();
+    announceCallState(callMode);
   }
 
-  async function stopLocalVideo() {
-    if (!videoEnabled) return;
+  async function stopCall() {
+    if (callMode === "off") return;
     if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
     if (audioTransceiver) { try { await audioTransceiver.sender.replaceTrack(null); } catch (e) {} }
     if (videoTransceiver) { try { await videoTransceiver.sender.replaceTrack(null); } catch (e) {} }
     document.getElementById("localVideo").srcObject = null;
     document.getElementById("localVideo").classList.add("hidden");
-    videoEnabled = false;
-    updateVideoBtn();
+    callMode = "off";
+    updateCallButtons();
     updateVideoRowVisibility();
-    announceVideoState(false);
+    announceCallState("off");
+  }
+
+  async function toggleVoice() {
+    if (callMode === "audio") {
+      await stopCall();
+      return;
+    }
+    await startCall("audio");
   }
 
   async function toggleVideo() {
-    if (videoEnabled) {
-      await stopLocalVideo();
+    if (callMode === "video") {
+      await stopCall();
       return;
     }
-    if (!pc || pc.connectionState !== "connected") {
-      addMsg("Video needs an active direct P2P connection -- still working on that.", "sys");
-      return;
-    }
-    await startLocalVideo();
+    await startCall("video");
   }
 
   function copyShareUrl() {
@@ -983,8 +1223,7 @@
   }
 
   async function hostChat() {
-    let baseRoom = document.getElementById("roomName").value.trim() || "super-secret-chat-992";
-    roomName = baseRoom.includes("-") ? baseRoom : `${baseRoom}-${getRandomSuffix()}`;
+    roomName = document.getElementById("roomName").value.trim() || "super-secret-chat-992";
     document.getElementById("roomName").value = roomName;
     role = "host";
     room = namespacedRoom(roomName);
