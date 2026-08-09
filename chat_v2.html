@@ -332,84 +332,9 @@
   let incomingStartTime = 0;
   let downloadAbort = false;
 
-  // ---------------------------------------------------------------------
-  // Adaptive transfer tuning
-  // ---------------------------------------------------------------------
-  // Two *different* things need tuning, and only one of them has a real answer
-  // we can look up:
-  //
-  // 1. Per-message size -- a hard protocol ceiling. The two browsers negotiate
-  //    this over SDP (a=max-message-size) and expose the result as
-  //    RTCSctpTransport.maxMessageSize (Baseline/widely available since 2023).
-  //    Exceeding it makes dc.send() throw. We read the real value instead of
-  //    guessing a constant -- old "always use 16KB" advice predates this API.
-  //
-  // 2. The in-flight window -- how much unacked data we let queue up before
-  //    pausing. There is NO browser API for this; the right value depends on
-  //    the actual bandwidth * RTT of this specific path, which we can't know
-  //    ahead of time. So we measure achieved throughput as we go and grow or
-  //    shrink the window on the fly (same idea as TCP's own window tuning).
-  const CHUNK_SIZE_FLOOR = 16 * 1024;          // safe minimum until we know the real ceiling
-  const CHUNK_SIZE_SAFETY_CAP = 1024 * 1024;   // don't send >1MB in one message even if the browser allows more
-
-  class TransferTuner {
-    constructor() {
-      this.chunkSize = CHUNK_SIZE_FLOOR;
-      this.highWatermark = 256 * 1024;   // starting window; grows/shrinks adaptively
-      this.lowWatermark = 64 * 1024;
-      this.minHighWatermark = 256 * 1024;
-      this.maxHighWatermark = 64 * 1024 * 1024; // sanity ceiling
-      this._drainStart = 0;
-      this._drainFrom = 0;
-      this._lastThroughput = 0;
-    }
-
-    // Call once we know the real negotiated per-message ceiling for this connection.
-    setNegotiatedCeiling(maxMessageSize) {
-      if (!maxMessageSize || !isFinite(maxMessageSize) || maxMessageSize <= 0) return; // unknown -> stay at floor
-      this.chunkSize = Math.max(CHUNK_SIZE_FLOOR, Math.min(maxMessageSize, CHUNK_SIZE_SAFETY_CAP));
-    }
-
-    // Call right before we pause and wait for bufferedamountlow.
-    markDrainStart(bufferedAmount) {
-      this._drainStart = performance.now();
-      this._drainFrom = bufferedAmount;
-    }
-
-    // Call once bufferedamountlow fires. Returns the measured throughput (bytes/sec)
-    // and adjusts the window: grow it while a bigger window is still helping,
-    // back off when it stops helping (or hurts) -- an AIMD-style feedback loop.
-    recordDrain() {
-      const elapsedMs = performance.now() - this._drainStart;
-      if (elapsedMs <= 0) return this._lastThroughput;
-      const drainedBytes = Math.max(0, this._drainFrom - this.lowWatermark);
-      const throughput = drainedBytes / (elapsedMs / 1000);
-
-      if (this._lastThroughput > 0) {
-        const ratio = throughput / this._lastThroughput;
-        if (ratio > 1.05) {
-          this.highWatermark = Math.min(this.maxHighWatermark, Math.round(this.highWatermark * 1.5));
-          this.lowWatermark = Math.round(this.highWatermark / 4);
-        } else if (ratio < 0.9) {
-          this.highWatermark = Math.max(this.minHighWatermark, Math.round(this.highWatermark * 0.75));
-          this.lowWatermark = Math.round(this.highWatermark / 4);
-        }
-      }
-      this._lastThroughput = throughput;
-      return throughput;
-    }
-
-    // Call if a send() is ever rejected or the transfer stalls unexpectedly --
-    // pull back hard rather than keep hammering the same window/chunk size.
-    onStallOrError() {
-      this.highWatermark = Math.max(this.minHighWatermark, Math.round(this.highWatermark * 0.5));
-      this.lowWatermark = Math.round(this.highWatermark / 4);
-      this.chunkSize = Math.max(CHUNK_SIZE_FLOOR, Math.floor(this.chunkSize / 2));
-      this._lastThroughput = 0;
-    }
-  }
-
-  let uploadTuner = new TransferTuner();
+  const FILE_CHUNK_SIZE = 16384;
+  const BUFFER_HIGH_WATERMARK = 1024 * 1024;
+  const BUFFER_LOW_WATERMARK = 256 * 1024;
 
   const genTransferId = () => Math.random().toString(36).slice(2);
 
@@ -789,14 +714,6 @@
       updateP2pBadge("connected");
       addMsg(everConnected ? "Direct P2P link re-established." : "Direct P2P link established. Chat and files now go peer-to-peer.", "sys");
       everConnected = true;
-
-      // Fresh connection -> fresh tuner (path characteristics may differ after a
-      // reconnect) and read the real per-message ceiling this pair of browsers
-      // negotiated, instead of assuming a fixed number.
-      uploadTuner = new TransferTuner();
-      const sctp = pc && pc.sctp;
-      uploadTuner.setNegotiatedCeiling(sctp && sctp.maxMessageSize);
-
       if (videoEnabled) dc.send(JSON.stringify({ type: "video-state", enabled: true }));
     };
 
@@ -1247,33 +1164,21 @@
     let lastUiUpdate = 0;
     const startTime = Date.now();
 
-    const tuner = uploadTuner;
-    dc.bufferedAmountLowThreshold = tuner.lowWatermark;
+    dc.bufferedAmountLowThreshold = BUFFER_LOW_WATERMARK;
     showTransferProgress(transferId, `Sending ${file.name}`, "me");
 
     while (offset < total) {
       if (uploadAbort || dataChannel !== dc || dc.readyState !== "open") break;
 
-      if (dc.bufferedAmount > tuner.highWatermark) {
-        dc.bufferedAmountLowThreshold = tuner.lowWatermark; // may have changed since last loop
-        tuner.markDrainStart(dc.bufferedAmount);
+      if (dc.bufferedAmount > BUFFER_HIGH_WATERMARK) {
         await new Promise((resolve) => dc.addEventListener("bufferedamountlow", resolve, { once: true }));
-        tuner.recordDrain();
         continue;
       }
 
-      const buf = await file.slice(offset, offset + tuner.chunkSize).arrayBuffer();
+      const buf = await file.slice(offset, offset + FILE_CHUNK_SIZE).arrayBuffer();
       if (uploadAbort || dataChannel !== dc || dc.readyState !== "open") break;
 
-      try {
-        dc.send(buf);
-      } catch (e) {
-        // The negotiated ceiling was smaller than we thought (or some other
-        // transient issue) -- back off hard and retry this same offset smaller,
-        // rather than losing the transfer.
-        tuner.onStallOrError();
-        continue;
-      }
+      dc.send(buf);
       offset += buf.byteLength;
 
       const now = Date.now();
