@@ -373,6 +373,43 @@
     font-weight: normal;
   }
 
+  .msg-text { white-space: pre-wrap; word-wrap: break-word; }
+
+  .msg-status {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 5px;
+    margin-top: 3px;
+    font-size: 0.72em;
+    opacity: 0.85;
+  }
+  .tick { font-style: normal; letter-spacing: -1px; }
+  .tick-pending { opacity: 0.75; letter-spacing: normal; }
+  .tick-sent { color: rgba(255, 255, 255, 0.75); }
+  .msg.them .tick-sent { color: rgba(255, 255, 255, 0.65); }
+  .tick-delivered { color: #bfe8ff; font-weight: 700; }
+  .via-label { opacity: 0.8; font-weight: normal; }
+
+  #ipLinkRow {
+    font-size: 0.75em;
+    color: var(--text-dim);
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 5px 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: fit-content;
+  }
+  #ipLinkRow .ip-mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--teal);
+  }
+  #ipLinkRow .ip-arrow { color: var(--text-faint); }
+  #ipLinkRow .ip-kind { color: var(--text-faint); }
+
   .transfer { min-width: 220px; }
   .transfer-label { font-size: 0.85em; font-weight: 600; margin-bottom: 7px; }
   .transfer-bar-track {
@@ -512,6 +549,8 @@
     <span id="peerBadge" class="badge state-offline"><span class="dot"></span><span class="label">Peer: not connected</span></span>
   </div>
 
+  <div id="ipLinkRow" class="hidden"></div>
+
   <div id="mediaControls">
     <button id="voiceToggleBtn" onclick="toggleVoice()">Start Voice Call</button>
     <button id="videoToggleBtn" onclick="toggleVideo()">Start Video</button>
@@ -579,6 +618,12 @@
 
   const genTransferId = () => Math.random().toString(36).slice(2);
 
+  // Chat message delivery tracking -----------------------------------
+  // id -> { text, state: "pending"|"sent"|"delivered", via: "p2p"|"relay"|null, retryTimer }
+  const outgoingMessages = new Map();
+  const MSG_RETRY_MS = 3000;
+  const genMsgId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+
   let audioTransceiver, videoTransceiver;
   let localStream = null;
   let callMode = "off";       // "off" | "audio" | "video" -- our own outgoing call state
@@ -619,7 +664,101 @@
     div.innerHTML = text;
     box.appendChild(div);
     box.scrollTop = box.scrollHeight;
+    return div;
   };
+
+  // ---------------------------------------------------------------------
+  // Outgoing chat message delivery tracking (checkmarks + retry)
+  // ---------------------------------------------------------------------
+  function addOutgoingChatMsg(id, text) {
+    const box = document.getElementById("chatBox");
+    const div = document.createElement("div");
+    div.className = "msg me";
+    div.id = `msg-${id}`;
+    div.innerHTML = `<div class="msg-text">${text}</div><div class="msg-status" id="mstat-${id}"></div>`;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+    return div;
+  }
+
+  function msgStatusHtml(state, via) {
+    const viaLabel = via === "p2p" ? "direct" : via === "relay" ? "via relay" : "";
+    if (state === "pending") {
+      return `<span class="tick tick-pending" title="Waiting for a connection to send">⏳ pending</span>`;
+    }
+    if (state === "delivered") {
+      return `<span class="tick tick-delivered" title="Delivered -- confirmed by peer">&#10003;&#10003;</span>${viaLabel ? `<span class="via-label">${viaLabel}</span>` : ""}`;
+    }
+    // "sent" -- handed to a channel, awaiting delivery confirmation
+    return `<span class="tick tick-sent" title="Sent -- waiting for delivery confirmation">&#10003;</span>${viaLabel ? `<span class="via-label">${viaLabel}</span>` : ""}`;
+  }
+
+  function renderMsgStatus(id) {
+    const m = outgoingMessages.get(id);
+    if (!m) return;
+    const el = document.getElementById(`mstat-${id}`);
+    if (el) el.innerHTML = msgStatusHtml(m.state, m.via);
+  }
+
+  function attemptSendMessage(id) {
+    const m = outgoingMessages.get(id);
+    if (!m || m.state === "delivered") return;
+
+    let via = null;
+    if (dataChannel && dataChannel.readyState === "open") {
+      try {
+        dataChannel.send(JSON.stringify({ type: "chat", id, text: m.text }));
+        via = "p2p";
+      } catch (e) { /* fall through to relay */ }
+    }
+    if (!via && ws && ws.readyState === WebSocket.OPEN && room) {
+      if (sendSignal({ kind: "chat", id, text: m.text })) via = "relay";
+    }
+
+    if (via) {
+      m.via = via;
+      m.state = "sent";
+    }
+    renderMsgStatus(id);
+    scheduleMessageRetry(id);
+  }
+
+  function scheduleMessageRetry(id) {
+    const m = outgoingMessages.get(id);
+    if (!m || m.state === "delivered") return;
+    clearTimeout(m.retryTimer);
+    m.retryTimer = setTimeout(() => {
+      const cur = outgoingMessages.get(id);
+      if (!cur || cur.state === "delivered") return;
+      attemptSendMessage(id); // retries on whatever channel (p2p or relay) is available now
+    }, MSG_RETRY_MS);
+  }
+
+  function flushPendingMessages() {
+    // Called whenever a channel newly becomes available (P2P opens, relay
+    // reconnects, or the peer is heard from) so queued/unacked messages go
+    // out immediately instead of waiting for the next retry tick.
+    outgoingMessages.forEach((m, id) => {
+      if (m.state !== "delivered") attemptSendMessage(id);
+    });
+  }
+
+  function markMessageDelivered(id) {
+    const m = outgoingMessages.get(id);
+    if (!m) return;
+    clearTimeout(m.retryTimer);
+    m.retryTimer = null;
+    m.state = "delivered";
+    renderMsgStatus(id);
+  }
+
+  function sendAck(id) {
+    if (dataChannel && dataChannel.readyState === "open") {
+      dataChannel.send(JSON.stringify({ type: "ack", id }));
+    } else if (ws && ws.readyState === WebSocket.OPEN && room) {
+      sendSignal({ kind: "ack", id });
+    }
+  }
 
   function formatBytes(bytes) {
     if (bytes === 0) return '0 Bytes';
@@ -729,6 +868,9 @@
 
     if (msg.kind === "chat") {
       addMsg(msg.text, "them");
+      if (msg.id) sendAck(msg.id);
+    } else if (msg.kind === "ack") {
+      if (msg.id) markMessageDelivered(msg.id);
     } else if (msg.kind === "hello" && role === "host") {
       handleHello();
     } else if (msg.kind === "offer" && role === "join") {
@@ -742,9 +884,14 @@
   }
 
   function recordHeartbeat(via) {
+    // A heartbeat is proof the peer is reachable right now -- if they were
+    // previously stale/unknown, flush any queued messages immediately
+    // instead of waiting for the retry timer.
+    const wasStale = !lastPeerHeartbeat || (Date.now() - lastPeerHeartbeat > HEARTBEAT_TIMEOUT_MS);
     lastPeerHeartbeat = Date.now();
     lastHeartbeatVia = via;
     updatePeerBadge();
+    if (wasStale) flushPendingMessages();
   }
 
   function sendHeartbeat() {
@@ -784,6 +931,7 @@
       reconnectAttempts = 0;
       updateWsBadge("live");
       if (pendingAnnounce) pendingAnnounce();
+      flushPendingMessages();
     });
 
     ws.addEventListener("message", handleSignalMessage);
@@ -838,15 +986,19 @@
         inProgress = false;
         clearTimeout(buildTimeoutTimer);
         clearTimeout(watchdogTimer);
+        updateIpLink(myPc);
       } else if (state === "connecting" || state === "new") {
         updateP2pBadge("connecting");
+        hideIpLink();
       } else if (state === "failed" || state === "closed") {
         updateP2pBadge("failed");
         clearTimeout(watchdogTimer);
+        hideIpLink();
         triggerReconnect(myPc);
       } else if (state === "disconnected") {
         updateP2pBadge("failed");
         clearTimeout(watchdogTimer);
+        hideIpLink();
         watchdogTimer = setTimeout(() => {
           if (pc === myPc && myPc.connectionState !== "connected") triggerReconnect(myPc);
         }, 4000);
@@ -878,6 +1030,45 @@
 
     return myPc;
   };
+
+  function hideIpLink() {
+    const el = document.getElementById("ipLinkRow");
+    el.classList.add("hidden");
+    el.innerHTML = "";
+  }
+
+  async function updateIpLink(targetPc) {
+    if (!targetPc || pc !== targetPc || targetPc.connectionState !== "connected") return;
+    try {
+      const stats = await targetPc.getStats();
+      if (pc !== targetPc || targetPc.connectionState !== "connected") return;
+
+      let pair = null;
+      stats.forEach((r) => {
+        if (r.type === "candidate-pair" && r.state === "succeeded" && (r.nominated || !pair)) {
+          if (!pair || r.nominated) pair = r;
+        }
+      });
+      if (!pair) { hideIpLink(); return; }
+
+      const local = stats.get(pair.localCandidateId);
+      const remote = stats.get(pair.remoteCandidateId);
+      if (!local || !remote) { hideIpLink(); return; }
+
+      const localAddr = local.address || local.ip;
+      const remoteAddr = remote.address || remote.ip;
+      if (!localAddr || !remoteAddr) { hideIpLink(); return; }
+
+      const isRelay = local.candidateType === "relay" || remote.candidateType === "relay";
+      const kind = isRelay ? "via TURN relay" : "direct link";
+
+      const el = document.getElementById("ipLinkRow");
+      el.innerHTML = `🔗 <span class="ip-mono">${localAddr}</span><span class="ip-arrow">⇄</span><span class="ip-mono">${remoteAddr}</span><span class="ip-kind">(${kind})</span>`;
+      el.classList.remove("hidden");
+    } catch (e) {
+      hideIpLink();
+    }
+  }
 
   function triggerReconnect(fromPc) {
     if (fromPc !== pc) return;
@@ -976,6 +1167,7 @@
       addMsg(everConnected ? "Direct P2P link re-established." : "Direct P2P link established. Chat and files now go peer-to-peer.", "sys");
       everConnected = true;
       if (callMode !== "off") dc.send(JSON.stringify({ type: "call-state", mode: callMode }));
+      flushPendingMessages();
     };
 
     dc.onclose = () => {
@@ -1047,6 +1239,13 @@
           recordHeartbeat("p2p");
           if (typeof msg.mode === "string") handleRemoteCallState(msg.mode);
         }
+        else if (msg.type === "chat") {
+          addMsg(msg.text, "them");
+          if (msg.id) sendAck(msg.id);
+        }
+        else if (msg.type === "ack") {
+          if (msg.id) markMessageDelivered(msg.id);
+        }
         else {
           addMsg(event.data, "them");
         }
@@ -1104,6 +1303,10 @@
   }
 
   async function handleHello() {
+    // The joiner's "hello" is the earliest proof they're reachable over the
+    // relay -- flush any queued/undelivered messages right away rather than
+    // waiting for the next heartbeat or retry tick.
+    flushPendingMessages();
     if (inProgress) return; 
     if (everConnected) addMsg("Your friend reconnected -- re-establishing direct link...", "sys");
     establishHostConnection();
@@ -1296,15 +1499,15 @@
     if (!val) return;
     const escapedVal = val.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-    if (dataChannel && dataChannel.readyState === "open") {
-      dataChannel.send(escapedVal);
-      addMsg(escapedVal, "me");
-    } else if (room && sendSignal({ kind: "chat", text: escapedVal })) {
-      addMsg(escapedVal + ' <span class="via-relay">(via relay)</span>', "me");
-    } else {
-      addMsg("Not connected yet -- message wasn't sent.", "sys");
-      return;
-    }
+    // Every outgoing message is tracked until the peer acks it. If no
+    // channel is available yet it's shown as "pending" and will be sent
+    // automatically -- over P2P or relay, whichever comes up first -- the
+    // moment a channel opens, with periodic retries in the meantime.
+    const id = genMsgId();
+    outgoingMessages.set(id, { text: escapedVal, state: "pending", via: null, retryTimer: null });
+    addOutgoingChatMsg(id, escapedVal);
+    attemptSendMessage(id);
+
     input.value = "";
   }
 
