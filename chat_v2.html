@@ -332,9 +332,9 @@
   let incomingStartTime = 0;
   let downloadAbort = false;
 
-const FILE_CHUNK_SIZE = 16384; // Must stay at 16KB to prevent WebRTC from choking
-const BUFFER_HIGH_WATERMARK = 16 * 1024 * 1024; // 16MB maximum buffer
-const BUFFER_LOW_WATERMARK = 4 * 1024 * 1024; // 4MB maximum buffer
+const FILE_CHUNK_SIZE = 16384;
+const BUFFER_HIGH_WATERMARK = 512 * 1024;
+const BUFFER_LOW_WATERMARK = 128 * 1024;
 
   const genTransferId = () => Math.random().toString(36).slice(2);
 
