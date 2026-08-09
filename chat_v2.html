@@ -384,10 +384,8 @@
     font-size: 0.72em;
     opacity: 0.85;
   }
-  .tick { font-style: normal; letter-spacing: -1px; }
-  .tick-pending { opacity: 0.75; letter-spacing: normal; }
-  .tick-sent { color: rgba(255, 255, 255, 0.75); }
-  .msg.them .tick-sent { color: rgba(255, 255, 255, 0.65); }
+  .tick { font-style: normal; }
+  .tick-pending { opacity: 0.7; }
   .tick-delivered { color: #bfe8ff; font-weight: 700; }
   .via-label { opacity: 0.8; font-weight: normal; }
 
@@ -619,10 +617,14 @@
   const genTransferId = () => Math.random().toString(36).slice(2);
 
   // Chat message delivery tracking -----------------------------------
-  // id -> { text, state: "pending"|"sent"|"delivered", via: "p2p"|"relay"|null, retryTimer }
+  // id -> { text, delivered: bool, via: "p2p"|"relay"|null, retryTimer, attempts }
   const outgoingMessages = new Map();
-  const MSG_RETRY_MS = 3000;
+  const MSG_RETRY_MS = 6000;
   const genMsgId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+  // ids of chat messages we've already displayed, so a retried/duplicate
+  // send (same id arriving twice) doesn't post the bubble twice.
+  const seenMessageIds = new Set();
 
   let audioTransceiver, videoTransceiver;
   let localStream = null;
@@ -681,28 +683,32 @@
     return div;
   }
 
-  function msgStatusHtml(state, via) {
-    const viaLabel = via === "p2p" ? "direct" : via === "relay" ? "via relay" : "";
-    if (state === "pending") {
-      return `<span class="tick tick-pending" title="Waiting for a connection to send">⏳ pending</span>`;
+  function msgStatusHtml(delivered, via) {
+    if (delivered) {
+      const viaLabel = via === "p2p" ? "direct" : via === "relay" ? "via relay" : "";
+      return `<span class="tick tick-delivered" title="Delivered -- confirmed by peer">&#10003;</span>${viaLabel ? `<span class="via-label">${viaLabel}</span>` : ""}`;
     }
-    if (state === "delivered") {
-      return `<span class="tick tick-delivered" title="Delivered -- confirmed by peer">&#10003;&#10003;</span>${viaLabel ? `<span class="via-label">${viaLabel}</span>` : ""}`;
-    }
-    // "sent" -- handed to a channel, awaiting delivery confirmation
-    return `<span class="tick tick-sent" title="Sent -- waiting for delivery confirmation">&#10003;</span>${viaLabel ? `<span class="via-label">${viaLabel}</span>` : ""}`;
+    return `<span class="tick tick-pending" title="Not yet delivered">⏳ pending</span>`;
   }
 
   function renderMsgStatus(id) {
     const m = outgoingMessages.get(id);
     if (!m) return;
     const el = document.getElementById(`mstat-${id}`);
-    if (el) el.innerHTML = msgStatusHtml(m.state, m.via);
+    if (el) el.innerHTML = msgStatusHtml(m.delivered, m.via);
+  }
+
+  // Do we currently have real evidence the peer is reachable? Used to avoid
+  // blindly re-sending over the relay on a timer when nobody may be there.
+  function peerLikelyReachable() {
+    if (dataChannel && dataChannel.readyState === "open") return true;
+    if (lastPeerHeartbeat && (Date.now() - lastPeerHeartbeat) < HEARTBEAT_TIMEOUT_MS) return true;
+    return false;
   }
 
   function attemptSendMessage(id) {
     const m = outgoingMessages.get(id);
-    if (!m || m.state === "delivered") return;
+    if (!m || m.delivered) return;
 
     let via = null;
     if (dataChannel && dataChannel.readyState === "open") {
@@ -715,31 +721,37 @@
       if (sendSignal({ kind: "chat", id, text: m.text })) via = "relay";
     }
 
-    if (via) {
-      m.via = via;
-      m.state = "sent";
-    }
+    if (via) m.via = via;
+    m.attempts++;
     renderMsgStatus(id);
     scheduleMessageRetry(id);
   }
 
   function scheduleMessageRetry(id) {
     const m = outgoingMessages.get(id);
-    if (!m || m.state === "delivered") return;
+    if (!m || m.delivered) return;
     clearTimeout(m.retryTimer);
     m.retryTimer = setTimeout(() => {
       const cur = outgoingMessages.get(id);
-      if (!cur || cur.state === "delivered") return;
-      attemptSendMessage(id); // retries on whatever channel (p2p or relay) is available now
+      if (!cur || cur.delivered) return;
+      // Only actually re-send if there's real evidence the peer is
+      // reachable right now -- otherwise just keep waiting quietly and
+      // let a flush (peer heard from, channel opens) trigger the resend
+      // instantly instead of hammering the relay on a blind timer.
+      if (peerLikelyReachable()) {
+        attemptSendMessage(id);
+      } else {
+        scheduleMessageRetry(id);
+      }
     }, MSG_RETRY_MS);
   }
 
   function flushPendingMessages() {
     // Called whenever a channel newly becomes available (P2P opens, relay
-    // reconnects, or the peer is heard from) so queued/unacked messages go
-    // out immediately instead of waiting for the next retry tick.
+    // reconnects, or the peer is heard from) so queued/undelivered messages
+    // go out immediately instead of waiting for the next retry tick.
     outgoingMessages.forEach((m, id) => {
-      if (m.state !== "delivered") attemptSendMessage(id);
+      if (!m.delivered) attemptSendMessage(id);
     });
   }
 
@@ -748,7 +760,7 @@
     if (!m) return;
     clearTimeout(m.retryTimer);
     m.retryTimer = null;
-    m.state = "delivered";
+    m.delivered = true;
     renderMsgStatus(id);
   }
 
@@ -758,6 +770,21 @@
     } else if (ws && ws.readyState === WebSocket.OPEN && room) {
       sendSignal({ kind: "ack", id });
     }
+  }
+
+  // Shared handler for an incoming chat message from either transport.
+  // Dedupes by id so a resend (e.g. our earlier ack got lost) can't post
+  // the same message twice, but still re-acks so the sender stops retrying.
+  function handleIncomingChatMessage(text, id) {
+    if (id) {
+      if (seenMessageIds.has(id)) {
+        sendAck(id);
+        return;
+      }
+      seenMessageIds.add(id);
+    }
+    addMsg(text, "them");
+    if (id) sendAck(id);
   }
 
   function formatBytes(bytes) {
@@ -867,8 +894,7 @@
     if (!msg || msg.room !== room) return;
 
     if (msg.kind === "chat") {
-      addMsg(msg.text, "them");
-      if (msg.id) sendAck(msg.id);
+      handleIncomingChatMessage(msg.text, msg.id);
     } else if (msg.kind === "ack") {
       if (msg.id) markMessageDelivered(msg.id);
     } else if (msg.kind === "hello" && role === "host") {
@@ -1037,7 +1063,7 @@
     el.innerHTML = "";
   }
 
-  async function updateIpLink(targetPc) {
+  async function updateIpLink(targetPc, attempt = 0) {
     if (!targetPc || pc !== targetPc || targetPc.connectionState !== "connected") return;
     try {
       const stats = await targetPc.getStats();
@@ -1049,15 +1075,19 @@
           if (!pair || r.nominated) pair = r;
         }
       });
-      if (!pair) { hideIpLink(); return; }
 
-      const local = stats.get(pair.localCandidateId);
-      const remote = stats.get(pair.remoteCandidateId);
-      if (!local || !remote) { hideIpLink(); return; }
+      const local = pair && stats.get(pair.localCandidateId);
+      const remote = pair && stats.get(pair.remoteCandidateId);
+      const localAddr = local && (local.address || local.ip);
+      const remoteAddr = remote && (remote.address || remote.ip);
 
-      const localAddr = local.address || local.ip;
-      const remoteAddr = remote.address || remote.ip;
-      if (!localAddr || !remoteAddr) { hideIpLink(); return; }
+      if (!localAddr || !remoteAddr) {
+        // Right after "connected" fires, getStats() sometimes hasn't
+        // settled on the nominated pair yet -- poll briefly before giving up.
+        if (attempt < 6) { setTimeout(() => updateIpLink(targetPc, attempt + 1), 500); return; }
+        hideIpLink();
+        return;
+      }
 
       const isRelay = local.candidateType === "relay" || remote.candidateType === "relay";
       const kind = isRelay ? "via TURN relay" : "direct link";
@@ -1240,8 +1270,7 @@
           if (typeof msg.mode === "string") handleRemoteCallState(msg.mode);
         }
         else if (msg.type === "chat") {
-          addMsg(msg.text, "them");
-          if (msg.id) sendAck(msg.id);
+          handleIncomingChatMessage(msg.text, msg.id);
         }
         else if (msg.type === "ack") {
           if (msg.id) markMessageDelivered(msg.id);
@@ -1504,7 +1533,7 @@
     // automatically -- over P2P or relay, whichever comes up first -- the
     // moment a channel opens, with periodic retries in the meantime.
     const id = genMsgId();
-    outgoingMessages.set(id, { text: escapedVal, state: "pending", via: null, retryTimer: null });
+    outgoingMessages.set(id, { text: escapedVal, delivered: false, via: null, retryTimer: null, attempts: 0 });
     addOutgoingChatMsg(id, escapedVal);
     attemptSendMessage(id);
 
