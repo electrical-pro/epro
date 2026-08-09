@@ -1,0 +1,1342 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>P2P WebRTC Chat & File Transfer</title>
+
+  <!--
+    This standalone version uses PeerJS cloud signaling for simplicity.
+    If your original app used custom signaling, you can replace the PeerJS
+    parts while keeping the optimized WebRTC file-transfer code.
+  -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      margin: 20px;
+      background: #101216;
+      color: #e8eef4;
+    }
+
+    h1 {
+      margin: 0 0 16px;
+      font-size: 28px;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+    }
+
+    h3 {
+      margin: 0 0 10px;
+      font-size: 16px;
+    }
+
+    .panel {
+      background: #171b21;
+      border: 1px solid #2b3440;
+      border-radius: 14px;
+      padding: 14px;
+      margin: 12px 0;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin: 8px 0;
+    }
+
+    input,
+    button {
+      background: #0f1318;
+      color: #e8eef4;
+      border: 1px solid #39434f;
+      border-radius: 10px;
+      padding: 9px 11px;
+      outline: none;
+    }
+
+    input:focus,
+    button:focus {
+      border-color: #5ba3ff;
+    }
+
+    button {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #inviteLink {
+      flex: 1;
+      min-width: 260px;
+    }
+
+    .status {
+      color: #9fb0c0;
+      font-size: 14px;
+      margin: 4px 0;
+      word-break: break-word;
+    }
+
+    #messages {
+      height: 240px;
+      overflow: auto;
+      background: #0b0e12;
+      border: 1px solid #2b3440;
+      border-radius: 12px;
+      padding: 10px;
+    }
+
+    .msg {
+      margin: 5px 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.35;
+    }
+
+    .msg.me {
+      color: #8fd3ff;
+    }
+
+    .msg.peer {
+      color: #93ffa0;
+    }
+
+    .msg.system {
+      color: #98a7b5;
+      font-style: italic;
+    }
+
+    #chatInput {
+      flex: 1;
+      min-width: 220px;
+    }
+
+    #dropZone {
+      padding: 26px 16px;
+      border: 2px dashed #4a5765;
+      border-radius: 14px;
+      text-align: center;
+      color: #9fb0c0;
+      cursor: pointer;
+      transition: 0.15s ease;
+      user-select: none;
+    }
+
+    #dropZone.ready {
+      border-color: #44c767;
+      color: #d9e7dd;
+    }
+
+    #dropZone.hover {
+      background: #1b222b;
+      border-color: #5ba3ff;
+    }
+
+    video {
+      width: 340px;
+      max-width: 100%;
+      height: 250px;
+      background: #000;
+      border-radius: 12px;
+      object-fit: cover;
+      border: 1px solid #2b3440;
+    }
+
+    #receivedList {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    #receivedList li {
+      margin: 6px 0;
+      word-break: break-word;
+    }
+
+    a {
+      color: #7dc4ff;
+    }
+  </style>
+</head>
+<body>
+  <h1>P2P WebRTC Chat &amp; File Transfer</h1>
+
+  <section class="panel">
+    <h2>Secure P2P Chat</h2>
+
+    <div class="row">
+      <label for="roomId">Room Name / ID:</label>
+      <input id="roomId" placeholder="my-room" autocomplete="off" />
+      <button id="hostBtn">1. Host Chat</button>
+      <button id="joinBtn">2. Join Chat</button>
+    </div>
+
+    <p style="margin: 10px 0 6px; color: #9fb0c0;">
+      Share this link with your friend:
+    </p>
+
+    <div class="row">
+      <input id="inviteLink" readonly placeholder="Invite link will appear here" />
+      <button id="copyBtn">Copy Link</button>
+    </div>
+
+    <div class="status" id="statusLine">Status: Waiting for input...</div>
+    <div class="status">Signaling: <span id="signalingStatus">offline</span></div>
+    <div class="status">P2P: <span id="p2pStatus">not connected</span></div>
+    <div class="status">Peer: <span id="peerStatus">not connected</span></div>
+  </section>
+
+  <section class="panel">
+    <button id="startVideoBtn">Start Video</button>
+
+    <div class="row" style="margin-top: 10px;">
+      <video id="localVideo" muted autoplay playsinline></video>
+      <video id="remoteVideo" autoplay playsinline></video>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div id="dropZone">
+      Drag and drop files here or use the attach button to send them!<br />
+      (needs a direct P2P connection)
+    </div>
+
+    <div class="row" style="margin-top: 10px;">
+      <input type="file" id="fileInput" multiple disabled />
+      <button id="sendFileBtn" disabled>📎 Send</button>
+    </div>
+
+    <div class="status" id="sendProgress"></div>
+  </section>
+
+  <section class="panel">
+    <div id="messages"></div>
+
+    <div class="row" style="margin-top: 10px;">
+      <input id="chatInput" placeholder="Type a message..." disabled autocomplete="off" />
+      <button id="chatSendBtn" disabled>Send</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h3>Received files</h3>
+    <ul id="receivedList"></ul>
+    <div class="status" id="receiveProgress"></div>
+  </section>
+
+  <script>
+    (() => {
+      const $ = (id) => document.getElementById(id);
+
+      const roomInput = $("roomId");
+      const hostBtn = $("hostBtn");
+      const joinBtn = $("joinBtn");
+      const inviteLink = $("inviteLink");
+      const copyBtn = $("copyBtn");
+
+      const statusLine = $("statusLine");
+      const signalingStatus = $("signalingStatus");
+      const p2pStatus = $("p2pStatus");
+      const peerStatus = $("peerStatus");
+
+      const startVideoBtn = $("startVideoBtn");
+      const localVideo = $("localVideo");
+      const remoteVideo = $("remoteVideo");
+
+      const dropZone = $("dropZone");
+      const fileInput = $("fileInput");
+      const sendFileBtn = $("sendFileBtn");
+      const sendProgress = $("sendProgress");
+
+      const messages = $("messages");
+      const chatInput = $("chatInput");
+      const chatSendBtn = $("chatSendBtn");
+
+      const receivedList = $("receivedList");
+      const receiveProgress = $("receiveProgress");
+
+      const PEER_PREFIX = "chat-v2-optimized-";
+      const FILE_HIGH_WATER = 32 * 1024 * 1024; // 32 MB. Tune 16 MB to 64 MB.
+
+      let peer = null;
+      let signalingConn = null;
+      let pc = null;
+
+      let chatDc = null;
+      let ctrlDc = null;
+      let fileDc = null;
+
+      let isHost = false;
+      let localStream = null;
+      let wantVideo = false;
+
+      let pendingCandidates = [];
+      let fileQueue = [];
+      let isSendingFiles = false;
+
+      let lastSendProgressTime = 0;
+
+      const pendingFileAcks = new Map();
+
+      let rx = createRxState();
+
+      const url = new URL(location.href);
+      const urlRoom = url.searchParams.get("room");
+      if (urlRoom) {
+        roomInput.value = urlRoom;
+        inviteLink.value = makeInvite(sanitizeRoom(urlRoom));
+      }
+
+      window.addEventListener("dragover", (e) => e.preventDefault());
+      window.addEventListener("drop", (e) => e.preventDefault());
+
+      updateUiState();
+      setStatus("Waiting for input...");
+
+      function createRxState() {
+        return {
+          meta: null,
+          parts: null,
+          chunksReceived: 0,
+          bytesReceived: 0,
+          pending: new Map(),
+          finished: false,
+          itemEl: null,
+          lastUi: 0
+        };
+      }
+
+      function sanitizeRoom(value) {
+        return String(value || "")
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9_-]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .slice(0, 64);
+      }
+
+      function makeInvite(room) {
+        const u = new URL(location.href);
+        u.searchParams.set("room", room);
+        return u.toString();
+      }
+
+      function setStatus(text) {
+        statusLine.textContent = `Status: ${text}`;
+      }
+
+      function setSignaling(text) {
+        signalingStatus.textContent = text;
+      }
+
+      function setPeer(text) {
+        peerStatus.textContent = text;
+      }
+
+      function addMessage(kind, text) {
+        const div = document.createElement("div");
+        div.className = `msg ${kind}`;
+        div.textContent = text;
+        messages.appendChild(div);
+        messages.scrollTop = messages.scrollHeight;
+      }
+
+      function formatBytes(bytes) {
+        if (!bytes) return "0 B";
+        const units = ["B", "KB", "MB", "GB", "TB"];
+        let value = bytes;
+        let i = 0;
+
+        while (value >= 1024 && i < units.length - 1) {
+          value /= 1024;
+          i++;
+        }
+
+        return `${value.toFixed(i ? 1 : 0)} ${units[i]}`;
+      }
+
+      function updateUiState() {
+        const chatOpen = !!(chatDc && chatDc.readyState === "open");
+        const fileOpen = !!(
+          ctrlDc &&
+          fileDc &&
+          ctrlDc.readyState === "open" &&
+          fileDc.readyState === "open"
+        );
+
+        chatInput.disabled = !chatOpen;
+        chatSendBtn.disabled = !chatOpen;
+
+        fileInput.disabled = !fileOpen;
+        sendFileBtn.disabled = !fileOpen || isSendingFiles;
+
+        dropZone.classList.toggle("ready", fileOpen);
+
+        p2pStatus.textContent = pc ? (pc.connectionState || "new") : "not connected";
+        peerStatus.textContent =
+          signalingConn && signalingConn.open ? "connected" : "not connected";
+      }
+
+      function destroyAll() {
+        destroyPc();
+        destroyPeer();
+        fileQueue.length = 0;
+        isSendingFiles = false;
+        sendProgress.textContent = "";
+        updateUiState();
+      }
+
+      function destroyPeer() {
+        if (peer) {
+          try {
+            peer.destroy();
+          } catch {}
+        }
+
+        peer = null;
+        signalingConn = null;
+        setSignaling("offline");
+        setPeer("not connected");
+      }
+
+      function destroyPc() {
+        rejectAllFileAcks();
+
+        if (pc) {
+          try {
+            pc.close();
+          } catch {}
+        }
+
+        pc = null;
+        chatDc = null;
+        ctrlDc = null;
+        fileDc = null;
+        pendingCandidates = [];
+        rx = createRxState();
+
+        updateUiState();
+      }
+
+      function sendSignal(obj) {
+        if (signalingConn && signalingConn.open) {
+          try {
+            signalingConn.send(obj);
+          } catch (err) {
+            console.warn("Signal send failed:", err);
+          }
+        }
+      }
+
+      function createPc() {
+        destroyPc();
+
+        pc = new RTCPeerConnection({
+          iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun1.l.google.com:19302" }
+          ]
+        });
+
+        pc.addEventListener("icecandidate", (event) => {
+          if (event.candidate) {
+            sendSignal({
+              type: "candidate",
+              candidate: event.candidate
+            });
+          }
+        });
+
+        pc.addEventListener("connectionstatechange", updateUiState);
+        pc.addEventListener("iceconnectionstatechange", updateUiState);
+        pc.addEventListener("signalingstatechange", updateUiState);
+
+        pc.addEventListener("track", (event) => {
+          const stream = event.streams[0] || new MediaStream([event.track]);
+          remoteVideo.srcObject = stream;
+        });
+
+        pc.addEventListener("datachannel", (event) => {
+          bindDataChannel(event.channel);
+        });
+
+        return pc;
+      }
+
+      function createDataChannels() {
+        if (!pc) return;
+
+        bindDataChannel(
+          pc.createDataChannel("chat", {
+            ordered: true
+          })
+        );
+
+        bindDataChannel(
+          pc.createDataChannel("file-ctrl", {
+            ordered: true
+          })
+        );
+
+        bindDataChannel(
+          pc.createDataChannel("file-data", {
+            ordered: false
+            // Reliable: no maxRetransmits/maxPacketLifeTime.
+          })
+        );
+      }
+
+      function bindDataChannel(dc) {
+        dc.binaryType = "arraybuffer";
+
+        if (dc.label === "chat") {
+          chatDc = dc;
+
+          dc.addEventListener("open", updateUiState);
+          dc.addEventListener("close", updateUiState);
+
+          dc.addEventListener("message", (event) => {
+            if (typeof event.data === "string") {
+              addMessage("peer", `Peer: ${event.data}`);
+            }
+          });
+        } else if (dc.label === "file-ctrl") {
+          ctrlDc = dc;
+
+          dc.addEventListener("open", updateUiState);
+          dc.addEventListener("close", updateUiState);
+          dc.addEventListener("message", handleCtrlMessage);
+        } else if (dc.label === "file-data") {
+          fileDc = dc;
+          fileDc.bufferedAmountLowThreshold = Math.max(
+            fileDc.bufferedAmountLowThreshold || 0,
+            FILE_HIGH_WATER
+          );
+
+          dc.addEventListener("open", updateUiState);
+          dc.addEventListener("close", updateUiState);
+          dc.addEventListener("message", handleFileDataMessage);
+        }
+
+        updateUiState();
+      }
+
+      function setupSignalingConn(conn) {
+        signalingConn = conn;
+        setPeer("connecting");
+
+        let openedHandled = false;
+
+        const onOpen = async () => {
+          if (openedHandled) return;
+          openedHandled = true;
+
+          setPeer("connected");
+          updateUiState();
+
+          if (isHost) {
+            setStatus("Peer connected. Creating WebRTC session...");
+            await hostCreateConnection();
+          } else {
+            setStatus("Connected to host. Waiting for WebRTC offer...");
+          }
+        };
+
+        conn.on("open", onOpen);
+        conn.on("data", handleSignalingMessage);
+
+        conn.on("close", () => {
+          setPeer("disconnected");
+          setStatus("Signaling connection closed.");
+          destroyPc();
+          updateUiState();
+        });
+
+        conn.on("error", (err) => {
+          setStatus(`Signaling error: ${err?.message || err}`);
+        });
+
+        if (conn.open) {
+          setTimeout(onOpen, 0);
+        }
+      }
+
+      async function hostCreateConnection() {
+        createPc();
+        createDataChannels();
+
+        if (wantVideo && localStream) {
+          addLocalTracks();
+        }
+
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+
+          sendSignal({
+            type: "description",
+            description: pc.localDescription
+          });
+
+          setStatus("Offer sent. Waiting for answer...");
+        } catch (err) {
+          setStatus(`Offer error: ${err.message}`);
+        }
+      }
+
+      async function handleSignalingMessage(msg) {
+        if (!msg || typeof msg !== "object") return;
+
+        if (msg.type === "description") {
+          const desc = msg.description;
+          if (!desc) return;
+
+          try {
+            if (!pc) {
+              if (desc.type !== "offer") return;
+              createPc();
+
+              if (wantVideo && localStream) {
+                addLocalTracks();
+              }
+            }
+
+            // Basic glare recovery.
+            if (desc.type === "offer" && pc.signalingState !== "stable") {
+              try {
+                await pc.setLocalDescription({ type: "rollback" });
+              } catch {}
+            }
+
+            await pc.setRemoteDescription(desc);
+            await flushCandidates();
+
+            if (desc.type === "offer") {
+              const answer = await pc.createAnswer();
+              await pc.setLocalDescription(answer);
+
+              sendSignal({
+                type: "description",
+                description: pc.localDescription
+              });
+
+              setStatus("Answer sent.");
+            } else {
+              setStatus("Answer received.");
+            }
+
+            updateUiState();
+          } catch (err) {
+            setStatus(`SDP error: ${err.message}`);
+          }
+        } else if (msg.type === "candidate") {
+          if (!pc || !msg.candidate) return;
+
+          try {
+            if (pc.remoteDescription) {
+              await pc.addIceCandidate(msg.candidate);
+            } else {
+              pendingCandidates.push(msg.candidate);
+            }
+          } catch {}
+        }
+      }
+
+      async function flushCandidates() {
+        if (!pc || !pc.remoteDescription) return;
+
+        const candidates = pendingCandidates.splice(0);
+
+        for (const candidate of candidates) {
+          await pc.addIceCandidate(candidate).catch(() => {});
+        }
+      }
+
+      function addLocalTracks() {
+        if (!pc || !localStream) return;
+
+        for (const track of localStream.getTracks()) {
+          const already = pc.getSenders().some((sender) => sender.track === track);
+          if (!already) {
+            pc.addTrack(track, localStream);
+          }
+        }
+      }
+
+      function startHost(room) {
+        destroyAll();
+
+        isHost = true;
+        roomInput.value = room;
+        inviteLink.value = makeInvite(room);
+
+        if (!window.Peer) {
+          setStatus("PeerJS library failed to load.");
+          return;
+        }
+
+        setStatus(`Creating host room: ${room}`);
+        setSignaling("starting...");
+
+        peer = new Peer(PEER_PREFIX + room, {
+          debug: 1
+        });
+
+        peer.on("open", () => {
+          setSignaling("online");
+          setStatus(`Hosting room: ${room}. Waiting for peer...`);
+        });
+
+        peer.on("connection", (conn) => {
+          if (signalingConn && signalingConn.open) {
+            try {
+              conn.close();
+            } catch {}
+            return;
+          }
+
+          setupSignalingConn(conn);
+        });
+
+        peer.on("error", (err) => {
+          setSignaling("error");
+          setStatus(`PeerJS error: ${err.type || err.message || err}`);
+        });
+
+        peer.on("disconnected", () => {
+          setSignaling("disconnected");
+
+          if (peer) {
+            try {
+              peer.reconnect();
+            } catch {}
+          }
+        });
+      }
+
+      function startJoin(room) {
+        destroyAll();
+
+        isHost = false;
+        roomInput.value = room;
+        inviteLink.value = makeInvite(room);
+
+        if (!window.Peer) {
+          setStatus("PeerJS library failed to load.");
+          return;
+        }
+
+        setStatus(`Joining room: ${room}`);
+        setSignaling("starting...");
+
+        peer = new Peer({
+          debug: 1
+        });
+
+        peer.on("open", () => {
+          setSignaling("online");
+          setStatus("Connecting to host...");
+
+          const conn = peer.connect(PEER_PREFIX + room, {
+            reliable: true
+          });
+
+          setupSignalingConn(conn);
+        });
+
+        peer.on("error", (err) => {
+          setSignaling("error");
+          setStatus(`PeerJS error: ${err.type || err.message || err}`);
+        });
+
+        peer.on("disconnected", () => {
+          setSignaling("disconnected");
+
+          if (peer) {
+            try {
+              peer.reconnect();
+            } catch {}
+          }
+        });
+      }
+
+      hostBtn.addEventListener("click", () => {
+        const room =
+          sanitizeRoom(roomInput.value || urlRoom || "") ||
+          `room-${Math.random().toString(36).slice(2, 8)}`;
+
+        startHost(room);
+      });
+
+      joinBtn.addEventListener("click", () => {
+        const room = sanitizeRoom(roomInput.value || urlRoom || "");
+
+        if (!room) {
+          setStatus("Enter a room name / ID first.");
+          roomInput.focus();
+          return;
+        }
+
+        startJoin(room);
+      });
+
+      copyBtn.addEventListener("click", async () => {
+        const link = inviteLink.value;
+
+        if (!link) {
+          setStatus("No invite link yet.");
+          return;
+        }
+
+        try {
+          await navigator.clipboard.writeText(link);
+          setStatus("Invite link copied.");
+        } catch {
+          inviteLink.select();
+          document.execCommand("copy");
+          setStatus("Invite link copied.");
+        }
+      });
+
+      startVideoBtn.addEventListener("click", async () => {
+        try {
+          if (!localStream) {
+            localStream = await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: false
+            });
+
+            localVideo.srcObject = localStream;
+          }
+
+          wantVideo = true;
+
+          if (pc) {
+            addLocalTracks();
+
+            if (pc.signalingState === "stable") {
+              const offer = await pc.createOffer();
+              await pc.setLocalDescription(offer);
+
+              sendSignal({
+                type: "description",
+                description: pc.localDescription
+              });
+            }
+          }
+
+          setStatus("Video started.");
+        } catch (err) {
+          setStatus(`Video error: ${err.message}`);
+        }
+      });
+
+      function sendChatMessage() {
+        const text = chatInput.value.trim();
+
+        if (!text) return;
+
+        if (!chatDc || chatDc.readyState !== "open") {
+          addMessage("system", "Chat channel is not open yet.");
+          return;
+        }
+
+        try {
+          chatDc.send(text);
+          addMessage("me", `You: ${text}`);
+          chatInput.value = "";
+        } catch (err) {
+          addMessage("system", `Chat send failed: ${err.message}`);
+        }
+      }
+
+      chatSendBtn.addEventListener("click", sendChatMessage);
+
+      chatInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          sendChatMessage();
+        }
+      });
+
+      dropZone.addEventListener("click", () => {
+        if (!fileInput.disabled) {
+          fileInput.click();
+        }
+      });
+
+      ["dragenter", "dragover"].forEach((eventName) => {
+        dropZone.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          dropZone.classList.add("hover");
+        });
+      });
+
+      ["dragleave", "drop"].forEach((eventName) => {
+        dropZone.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          dropZone.classList.remove("hover");
+        });
+      });
+
+      dropZone.addEventListener("drop", (event) => {
+        const files = Array.from(event.dataTransfer.files || []);
+        enqueueFiles(files);
+      });
+
+      fileInput.addEventListener("change", () => {
+        const files = Array.from(fileInput.files || []);
+        enqueueFiles(files);
+        fileInput.value = "";
+      });
+
+      sendFileBtn.addEventListener("click", () => {
+        const files = Array.from(fileInput.files || []);
+        enqueueFiles(files);
+        fileInput.value = "";
+      });
+
+      function enqueueFiles(files) {
+        if (!files || !files.length) return;
+
+        if (!ctrlDc || !fileDc || ctrlDc.readyState !== "open" || fileDc.readyState !== "open") {
+          addMessage("system", "File channels are not ready yet.");
+          return;
+        }
+
+        fileQueue.push(...files);
+        addMessage("system", `Queued ${files.length} file(s).`);
+
+        if (!isSendingFiles) {
+          processFileQueue();
+        }
+      }
+
+      async function processFileQueue() {
+        isSendingFiles = true;
+        updateUiState();
+
+        while (fileQueue.length) {
+          const file = fileQueue.shift();
+
+          addMessage("system", `Sending ${file.name}...`);
+
+          try {
+            await sendFileFast(file, (sent, total) => {
+              updateSendProgress(file.name, sent, total);
+            });
+
+            addMessage("system", `Sent ${file.name}. Receiver acknowledged it.`);
+          } catch (err) {
+            addMessage("system", `Failed to send ${file.name}: ${err.message}`);
+            break;
+          }
+        }
+
+        isSendingFiles = false;
+        sendProgress.textContent = "";
+        updateUiState();
+      }
+
+      function updateSendProgress(name, sent, total) {
+        const now = performance.now();
+
+        if (sent !== total && now - lastSendProgressTime < 250) {
+          return;
+        }
+
+        lastSendProgressTime = now;
+
+        const pct = total ? Math.floor((sent / total) * 100) : 100;
+        sendProgress.textContent =
+          `Sending ${name}: ${pct}% (${formatBytes(sent)} / ${formatBytes(total)})`;
+
+        if (sent === total) {
+          setTimeout(() => {
+            if (sendProgress.textContent.includes(name)) {
+              sendProgress.textContent = "";
+            }
+          }, 3000);
+        }
+      }
+
+      function waitDcOpen(dc, timeout = 15000) {
+        return new Promise((resolve, reject) => {
+          if (!dc) {
+            reject(new Error("DataChannel missing"));
+            return;
+          }
+
+          if (dc.readyState === "open") {
+            resolve();
+            return;
+          }
+
+          let done = false;
+
+          const timer = setTimeout(() => {
+            cleanup();
+            reject(new Error("DataChannel open timeout"));
+          }, timeout);
+
+          const onOpen = () => {
+            cleanup();
+            resolve();
+          };
+
+          const onClose = () => {
+            cleanup();
+            reject(new Error("DataChannel closed"));
+          };
+
+          const onError = () => {
+            cleanup();
+            reject(new Error("DataChannel error"));
+          };
+
+          function cleanup() {
+            if (done) return;
+            done = true;
+
+            clearTimeout(timer);
+
+            dc.removeEventListener("open", onOpen);
+            dc.removeEventListener("close", onClose);
+            dc.removeEventListener("error", onError);
+          }
+
+          dc.addEventListener("open", onOpen);
+          dc.addEventListener("close", onClose);
+          dc.addEventListener("error", onError);
+        });
+      }
+
+      function waitBufferLow(dc) {
+        return new Promise((resolve) => {
+          const threshold = dc.bufferedAmountLowThreshold || FILE_HIGH_WATER;
+
+          if (dc.bufferedAmount <= threshold || dc.readyState !== "open") {
+            resolve();
+            return;
+          }
+
+          let done = false;
+
+          const finish = () => {
+            if (done) return;
+            done = true;
+
+            dc.removeEventListener("bufferedamountlow", onLow);
+            clearInterval(timer);
+
+            resolve();
+          };
+
+          const onLow = () => finish();
+
+          dc.addEventListener("bufferedamountlow", onLow);
+
+          const timer = setInterval(() => {
+            if (dc.bufferedAmount <= threshold || dc.readyState !== "open") {
+              finish();
+            }
+          }, 25);
+        });
+      }
+
+      function packChunk(seq, buf) {
+        const out = new Uint8Array(4 + buf.byteLength);
+        new DataView(out.buffer).setUint32(0, seq >>> 0, true);
+        out.set(new Uint8Array(buf), 4);
+        return out.buffer;
+      }
+
+      function waitForFileComplete(id, timeout = 600000) {
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            pendingFileAcks.delete(id);
+            reject(new Error("Timed out waiting for receiver acknowledgement."));
+          }, timeout);
+
+          pendingFileAcks.set(id, {
+            resolve: () => {
+              clearTimeout(timer);
+              resolve();
+            },
+            reject: (err) => {
+              clearTimeout(timer);
+              reject(err);
+            }
+          });
+        });
+      }
+
+      function resolveFileComplete(id) {
+        const entry = pendingFileAcks.get(id);
+
+        if (!entry) return;
+
+        pendingFileAcks.delete(id);
+        entry.resolve();
+      }
+
+      function rejectAllFileAcks() {
+        for (const [, entry] of pendingFileAcks) {
+          entry.reject(new Error("Connection closed."));
+        }
+
+        pendingFileAcks.clear();
+      }
+
+      async function sendFileFast(file, onProgress) {
+        await Promise.all([
+          waitDcOpen(ctrlDc),
+          waitDcOpen(fileDc)
+        ]);
+
+        fileDc.bufferedAmountLowThreshold = Math.max(
+          fileDc.bufferedAmountLowThreshold || 0,
+          FILE_HIGH_WATER
+        );
+
+        const preferredChunk = 512 * 1024;
+
+        const maxMessageSize = fileDc.maxMessageSize || 0;
+        const safeMaxPayload =
+          maxMessageSize > 4 ? maxMessageSize - 4 : preferredChunk;
+
+        const chunkSize = Math.max(
+          16 * 1024,
+          Math.min(preferredChunk, safeMaxPayload)
+        );
+
+        const totalChunks = Math.ceil(file.size / chunkSize);
+
+        const id =
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `file-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+        const ackPromise = waitForFileComplete(id, 600000);
+
+        ctrlDc.send(
+          JSON.stringify({
+            type: "file-meta",
+            id,
+            name: file.name,
+            size: file.size,
+            mime: file.type,
+            chunkSize,
+            totalChunks
+          })
+        );
+
+        if (totalChunks === 0) {
+          await ackPromise;
+          return;
+        }
+
+        const READ_AHEAD = 8;
+        const queue = [];
+
+        let readOffset = 0;
+        let seq = 0;
+        let sentBytes = 0;
+
+        function pushRead() {
+          if (readOffset >= file.size) return;
+
+          const end = Math.min(readOffset + chunkSize, file.size);
+          const promise = file.slice(readOffset, end).arrayBuffer();
+
+          queue.push(promise);
+          readOffset = end;
+        }
+
+        while (queue.length < READ_AHEAD && readOffset < file.size) {
+          pushRead();
+        }
+
+        while (queue.length > 0) {
+          const buf = await queue.shift();
+
+          pushRead();
+
+          if (fileDc.readyState !== "open") {
+            throw new Error("File DataChannel closed.");
+          }
+
+          if (fileDc.bufferedAmount > fileDc.bufferedAmountLowThreshold) {
+            await waitBufferLow(fileDc);
+          }
+
+          if (fileDc.readyState !== "open") {
+            throw new Error("File DataChannel closed.");
+          }
+
+          fileDc.send(packChunk(seq, buf));
+
+          seq += 1;
+          sentBytes += buf.byteLength;
+
+          if (onProgress) {
+            onProgress(sentBytes, file.size);
+          }
+        }
+
+        await ackPromise;
+      }
+
+      function handleCtrlMessage(event) {
+        if (typeof event.data !== "string") return;
+
+        let msg;
+
+        try {
+          msg = JSON.parse(event.data);
+        } catch {
+          return;
+        }
+
+        if (!msg || typeof msg !== "object") return;
+
+        if (msg.type === "file-meta") {
+          handleFileMeta(msg);
+        } else if (msg.type === "file-complete") {
+          resolveFileComplete(msg.id);
+        }
+      }
+
+      function handleFileMeta(meta) {
+        const pendingBeforeMeta = rx.pending;
+
+        rx = createRxState();
+        rx.meta = meta;
+        rx.parts = new Array(meta.totalChunks);
+
+        const li = document.createElement("li");
+        li.textContent = `Receiving ${meta.name}... 0%`;
+
+        receivedList.appendChild(li);
+        rx.itemEl = li;
+
+        receiveProgress.textContent = `Receiving ${meta.name}...`;
+
+        for (const [seq, part] of pendingBeforeMeta) {
+          storeChunk(seq, part);
+        }
+
+        pendingBeforeMeta.clear();
+
+        if (meta.totalChunks === 0) {
+          finishReceivedFile();
+        }
+      }
+
+      function handleFileDataMessage(event) {
+        if (!(event.data instanceof ArrayBuffer)) return;
+        if (event.data.byteLength < 4) return;
+
+        const seq = new DataView(event.data).getUint32(0, true);
+        const part = event.data.slice(4);
+
+        if (!rx.meta) {
+          rx.pending.set(seq, part);
+        } else {
+          storeChunk(seq, part);
+        }
+      }
+
+      function storeChunk(seq, part) {
+        if (!rx.meta || rx.finished || !rx.parts) return;
+        if (seq >= rx.parts.length) return;
+        if (rx.parts[seq]) return;
+
+        rx.parts[seq] = part;
+        rx.chunksReceived += 1;
+        rx.bytesReceived += part.byteLength;
+
+        const now = performance.now();
+
+        if (rx.itemEl && now - rx.lastUi > 250) {
+          rx.lastUi = now;
+
+          const pct = rx.meta.size
+            ? Math.floor((rx.bytesReceived / rx.meta.size) * 100)
+            : 100;
+
+          rx.itemEl.textContent = `Receiving ${rx.meta.name}... ${pct}%`;
+          receiveProgress.textContent = rx.itemEl.textContent;
+        }
+
+        if (rx.chunksReceived === rx.meta.totalChunks) {
+          finishReceivedFile();
+        }
+      }
+
+      function finishReceivedFile() {
+        if (!rx.meta || rx.finished) return;
+
+        rx.finished = true;
+
+        const meta = rx.meta;
+
+        const blob = new Blob(rx.parts || [], {
+          type: meta.mime || "application/octet-stream"
+        });
+
+        const objectUrl = URL.createObjectURL(blob);
+
+        if (rx.itemEl) {
+          rx.itemEl.textContent = "";
+
+          const a = document.createElement("a");
+          a.href = objectUrl;
+          a.download = meta.name;
+          a.textContent = `Download ${meta.name} (${formatBytes(meta.size)})`;
+
+          a.addEventListener("click", () => {
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
+          });
+
+          rx.itemEl.appendChild(a);
+        }
+
+        receiveProgress.textContent = `Received ${meta.name}.`;
+        addMessage("system", `Received ${meta.name}.`);
+
+        try {
+          if (ctrlDc && ctrlDc.readyState === "open") {
+            ctrlDc.send(
+              JSON.stringify({
+                type: "file-complete",
+                id: meta.id
+              })
+            );
+          }
+        } catch {}
+
+        rx = createRxState();
+      }
+    })();
+  </script>
+</body>
+</html>
