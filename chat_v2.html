@@ -609,9 +609,6 @@
   let incomingStartTime = 0;
   let downloadAbort = false;
 
-  let swRegistration = null;      // registered download-bridge Service Worker, if any
-  let swReady = false;            // true once it's active and controlling this page
-
   const FILE_CHUNK_SIZE = 16384;
   const BUFFER_HIGH_WATERMARK = 1024 * 1024;
   const BUFFER_LOW_WATERMARK = 256 * 1024;
@@ -1770,92 +1767,6 @@
     uploadTransferId = null;
   }
 
-  // ---------------------------------------------------------------------
-  // Native-download-bar streaming via a Service Worker (StreamSaver-style).
-  //
-  // The File System Access API (below) gives Chrome/Edge a real streaming
-  // save-to-disk writer, but Firefox and Safari don't implement it -- their
-  // only fallback used to be buffering the whole file in memory as a Blob.
-  // This adds a middle tier for those browsers: a Service Worker "claims" a
-  // same-origin URL (/sw-download/<token>) and answers its own fetch event
-  // with a ReadableStream we feed manually as data-channel chunks arrive.
-  // The browser has no idea it's not a real network response, so it uses
-  // its normal streaming download path -- native downloads-bar progress,
-  // no save dialog, and nothing held in memory beyond the current batch.
-  //
-  // Requires a secure context (https, or localhost) served over http(s) --
-  // it silently does nothing when the page is opened as a local file://.
-  async function initDownloadServiceWorker() {
-    if (!("serviceWorker" in navigator) || !window.isSecureContext) return;
-    try {
-      const reg = await navigator.serviceWorker.register("./sw-download.js", { scope: "./" });
-      await navigator.serviceWorker.ready;
-      swRegistration = reg;
-      swReady = !!navigator.serviceWorker.controller;
-    } catch (e) {
-      swReady = false;
-    }
-  }
-  initDownloadServiceWorker();
-
-  // Opens a MessageChannel to the download Service Worker, registers a
-  // token for this file, then "clicks" a same-origin link to that token's
-  // URL so the browser's native download machinery picks it up. Resolves
-  // to a writer with the same {write(blob), close(), abort()} shape as a
-  // FileSystemWritableFileStream, so the rest of the receive pipeline
-  // doesn't need to know which tier it's talking to.
-  function createServiceWorkerWriter(info) {
-    return new Promise((resolve, reject) => {
-      if (!swReady || !navigator.serviceWorker.controller) { reject(new Error("sw-unavailable")); return; }
-
-      const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-      const channel = new MessageChannel();
-      const port = channel.port1;
-
-      const timeout = setTimeout(() => {
-        port.onmessage = null;
-        reject(new Error("sw-timeout"));
-      }, 4000);
-
-      port.onmessage = (event) => {
-        if (!event.data || event.data.type !== "ready") return;
-        clearTimeout(timeout);
-        port.onmessage = null;
-
-        resolve({
-          write(blob) {
-            return blob.arrayBuffer().then((buf) => port.postMessage({ type: "chunk", data: buf }, [buf]));
-          },
-          close() {
-            port.postMessage({ type: "close" });
-            return Promise.resolve();
-          },
-          abort() {
-            try { port.postMessage({ type: "abort" }); } catch (e) {}
-          }
-        });
-
-        const downloadUrl = new URL(`sw-download/${token}`, swRegistration.scope).href;
-        const a = document.createElement("a");
-        a.href = downloadUrl;
-        a.download = info.name; // hint only -- Content-Disposition is what actually forces it
-        a.rel = "noopener";
-        a.style.display = "none";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      };
-
-      navigator.serviceWorker.controller.postMessage({
-        type: "register-download",
-        token,
-        filename: info.name,
-        size: info.size,
-        mimeType: info.type || "application/octet-stream"
-      }, [channel.port2]);
-    });
-  }
-
   window.acceptFileTransfer = async function(transferId) {
     if (!incomingFileInfo || incomingFileInfo.transferId !== transferId) return;
     const info = incomingFileInfo;
@@ -1880,14 +1791,6 @@
           return;
         }
         incomingWriter = null; 
-      }
-    }
-
-    if (!incomingWriter && swReady && navigator.serviceWorker.controller) {
-      try {
-        incomingWriter = await createServiceWorkerWriter(info);
-      } catch (e) {
-        incomingWriter = null; // falls through to the in-memory Blob tier below
       }
     }
 
