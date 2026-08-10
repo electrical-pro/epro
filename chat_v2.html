@@ -68,18 +68,6 @@
     gap: 12px;
     margin: 6px 2px 18px;
   }
-  .app-header .logo {
-    width: 40px;
-    height: 40px;
-    flex-shrink: 0;
-    border-radius: 11px;
-    background: linear-gradient(145deg, var(--accent), var(--teal));
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 19px;
-    box-shadow: 0 6px 16px -4px rgba(79, 140, 255, 0.45);
-  }
   .app-header h2 {
     margin: 0;
     font-size: 1.15em;
@@ -327,7 +315,7 @@
 
   #chatBox {
     border: 1px solid var(--border);
-    height: 350px;
+    height: 480px;
     overflow-y: auto;
     padding: 14px;
     background: var(--panel-2);
@@ -396,16 +384,19 @@
     color: var(--text-dim);
     background: var(--panel-2);
     border: 1px solid var(--border);
-    border-radius: 20px;
-    padding: 5px 12px;
+    border-radius: 12px;
+    padding: 6px 12px;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
-    width: fit-content;
+    row-gap: 2px;
+    column-gap: 6px;
+    max-width: 100%;
   }
   #ipLinkRow .ip-mono {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     color: var(--teal);
+    word-break: break-all;
   }
   #ipLinkRow .ip-arrow { color: var(--text-faint); }
   #ipLinkRow .ip-kind { color: var(--text-faint); }
@@ -497,12 +488,12 @@
   @media (max-width: 480px) {
     body { padding-left: 10px; padding-right: 10px; }
     .controls, #chatUI { padding: 14px; }
-    #chatBox { height: min(50vh, 420px); padding: 10px; }
+    #chatBox { height: min(58vh, 520px); padding: 10px; }
     .msg { max-width: 88%; font-size: 14px; }
     #videoRow { flex-direction: column; }
     #videoRow video { aspect-ratio: 16 / 10; }
-    .app-header .logo { width: 34px; height: 34px; font-size: 16px; border-radius: 9px; }
     .app-header h2 { font-size: 1.02em; }
+    #ipLinkRow .ip-arrow { flex-basis: 100%; height: 0; overflow: hidden; }
     button { font-size: 14.5px; }
   }
 </style>
@@ -510,7 +501,6 @@
 <body>
 
 <div class="app-header">
-  <div class="logo">🔒</div>
   <div>
     <h2>Secure P2P Chat</h2>
     <p class="subtitle">Direct WebRTC connection · nothing stored on a server</p>
