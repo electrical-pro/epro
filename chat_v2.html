@@ -557,8 +557,9 @@
 
   <div id="videoRow" class="av-hidden">
     <video id="localVideo" class="av-hidden" autoplay muted playsinline></video>
-    <video id="remoteVideo" class="av-hidden" autoplay playsinline></video>
+    <video id="remoteVideo" class="av-hidden" autoplay playsinline muted></video>
   </div>
+  <audio id="remoteAudio" autoplay></audio>
 
   <p class="dropHint">📎 Drag and drop files here, or use the attach button (needs a direct P2P connection)</p>
 
@@ -1061,21 +1062,25 @@
     myPc.ontrack = (event) => {
       if (pc !== myPc) return;
       const track = event.track;
-      const remoteVideo = document.getElementById("remoteVideo");
-      if (!remoteVideo.srcObject) remoteVideo.srcObject = new MediaStream();
-      remoteVideo.srcObject.addTrack(track);
-      
-      remoteVideo.srcObject = remoteVideo.srcObject;
-      remoteVideo.play().catch(() => {});
+      const targetEl = document.getElementById(track.kind === "audio" ? "remoteAudio" : "remoteVideo");
+      if (!targetEl.srcObject) targetEl.srcObject = new MediaStream();
+      targetEl.srcObject.addTrack(track);
+      targetEl.srcObject = targetEl.srcObject;
+      targetEl.play().catch(() => {});
     };
 
     if (isHost) {
       audioTransceiver = myPc.addTransceiver("audio", { direction: "sendrecv" });
       videoTransceiver = myPc.addTransceiver("video", { direction: "sendrecv" });
 
+      const remoteAudio = document.getElementById("remoteAudio");
+      if (!remoteAudio.srcObject) remoteAudio.srcObject = new MediaStream();
+      remoteAudio.srcObject.addTrack(audioTransceiver.receiver.track);
+      remoteAudio.srcObject = remoteAudio.srcObject;
+      remoteAudio.play().catch(() => {});
+
       const remoteVideo = document.getElementById("remoteVideo");
       if (!remoteVideo.srcObject) remoteVideo.srcObject = new MediaStream();
-      remoteVideo.srcObject.addTrack(audioTransceiver.receiver.track);
       remoteVideo.srcObject.addTrack(videoTransceiver.receiver.track);
       remoteVideo.srcObject = remoteVideo.srcObject;
       remoteVideo.play().catch(() => {});
@@ -1166,7 +1171,6 @@
     } else if (mode === "audio") {
       remoteVideo.classList.add("av-hidden");
       updateVideoRowVisibility();
-      remoteVideo.play().catch(() => {});
       if (callMode === "off") startCall("audio");
     } else {
       remoteVideo.classList.add("av-hidden");
@@ -1179,6 +1183,8 @@
     const rv = document.getElementById("remoteVideo");
     rv.srcObject = null;
     rv.classList.add("av-hidden");
+    const ra = document.getElementById("remoteAudio");
+    ra.srcObject = null;
     remoteCallMode = "off";
     updateVideoRowVisibility();
   }
@@ -1449,14 +1455,29 @@
     }
     callStarting = true;
     if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+    let actualMode = mode;
     try {
       localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: mode === "video" });
     } catch (e) {
-      addMsg("Microphone/camera access was denied or unavailable.", "sys");
-      callStarting = false;
-      return;
+      if (mode === "video") {
+        // No camera, camera denied, or camera busy -- fall back to a voice-only
+        // call instead of failing outright, as long as the microphone works.
+        try {
+          localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          actualMode = "audio";
+          addMsg("No camera available -- started a voice-only call instead.", "sys");
+        } catch (e2) {
+          addMsg("Microphone access was denied or unavailable.", "sys");
+          callStarting = false;
+          return;
+        }
+      } else {
+        addMsg("Microphone access was denied or unavailable.", "sys");
+        callStarting = false;
+        return;
+      }
     }
-    callMode = mode;
+    callMode = actualMode;
     callStarting = false;
     await attachLocalMediaTracks();
     updateCallButtons();
