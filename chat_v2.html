@@ -1150,25 +1150,44 @@
     const row = document.getElementById("videoRow");
     const lv = document.getElementById("localVideo");
     const rv = document.getElementById("remoteVideo");
-    const anyVisible = !lv.classList.contains("hidden") || !rv.classList.contains("hidden");
-    row.classList.toggle("hidden", !anyVisible);
+
+    // Check if elements are fully visible
+    const lvVisible = !lv.classList.contains("hidden") && !lv.classList.contains("av-hidden");
+    const rvVisible = !rv.classList.contains("hidden") && !rv.classList.contains("av-hidden");
+
+    // Check if elements are in the background audio state
+    const lvAudio = lv.classList.contains("av-hidden");
+    const rvAudio = rv.classList.contains("av-hidden");
+
+    if (lvVisible || rvVisible) {
+      row.classList.remove("hidden", "av-hidden");
+    } else if (lvAudio || rvAudio) {
+      row.classList.remove("hidden");
+      row.classList.add("av-hidden");
+    } else {
+      row.classList.remove("av-hidden");
+      row.classList.add("hidden");
+    }
   }
 
   function handleRemoteCallState(mode) {
     if (mode === remoteCallMode) return;
     remoteCallMode = mode;
     const remoteVideo = document.getElementById("remoteVideo");
+    
     if (mode === "video") {
-      remoteVideo.classList.remove("hidden");
+      remoteVideo.classList.remove("hidden", "av-hidden");
       updateVideoRowVisibility();
       remoteVideo.play().catch(() => {});
       if (callMode === "off") startCall("video");
     } else if (mode === "audio") {
-      remoteVideo.classList.add("hidden");
+      remoteVideo.classList.remove("hidden");
+      remoteVideo.classList.add("av-hidden"); // Use av-hidden to keep the media pipeline alive
       updateVideoRowVisibility();
       remoteVideo.play().catch(() => {});
       if (callMode === "off") startCall("audio");
     } else {
+      remoteVideo.classList.remove("av-hidden");
       remoteVideo.classList.add("hidden");
       updateVideoRowVisibility();
       if (callMode !== "off") stopCall();
@@ -1178,6 +1197,7 @@
   function resetRemoteVideo() {
     const rv = document.getElementById("remoteVideo");
     rv.srcObject = null;
+    rv.classList.remove("av-hidden");
     rv.classList.add("hidden");
     remoteCallMode = "off";
     updateVideoRowVisibility();
@@ -1187,14 +1207,17 @@
     if (!localStream) return;
     const audioTrack = localStream.getAudioTracks()[0];
     const videoTrack = localStream.getVideoTracks()[0];
+    
     if (audioTrack && audioTransceiver) { try { await audioTransceiver.sender.replaceTrack(audioTrack); } catch (e) {} }
     if (videoTransceiver) { try { await videoTransceiver.sender.replaceTrack(videoTrack || null); } catch (e) {} }
+    
     const localVideo = document.getElementById("localVideo");
     if (videoTrack) {
       localVideo.srcObject = localStream;
-      localVideo.classList.remove("hidden");
+      localVideo.classList.remove("hidden", "av-hidden");
     } else {
-      localVideo.srcObject = null;
+      localVideo.srcObject = null; // Prevent local audio echo
+      localVideo.classList.remove("av-hidden");
       localVideo.classList.add("hidden");
     }
     updateVideoRowVisibility();
@@ -1468,8 +1491,12 @@
     if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
     if (audioTransceiver) { try { await audioTransceiver.sender.replaceTrack(null); } catch (e) {} }
     if (videoTransceiver) { try { await videoTransceiver.sender.replaceTrack(null); } catch (e) {} }
-    document.getElementById("localVideo").srcObject = null;
-    document.getElementById("localVideo").classList.add("hidden");
+    
+    const localVideo = document.getElementById("localVideo");
+    localVideo.srcObject = null;
+    localVideo.classList.remove("av-hidden");
+    localVideo.classList.add("hidden");
+    
     callMode = "off";
     updateCallButtons();
     updateVideoRowVisibility();
