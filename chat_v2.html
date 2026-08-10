@@ -607,6 +607,8 @@
   let incomingFileInfo = null;    // {type,name,size,transferId} for the active download
   let incomingFileData = [];      // in-memory fallback buffer (no File System Access API)
   let incomingWriter = null;      // streaming disk writer, when the browser supports it
+  let incomingWriteChain = Promise.resolve(); // serializes writer.write() calls for backpressure
+  let incomingWritten = 0;        // bytes actually flushed to the writer (vs just received)
   let incomingReceived = 0;
   let incomingStartTime = 0;
   let downloadAbort = false;
@@ -1221,7 +1223,18 @@
         if (!incomingFileInfo || downloadAbort) return; 
         incomingReceived += event.data.byteLength;
         if (incomingWriter) {
-          incomingWriter.write(event.data).catch(() => {}); 
+          // Chain writes so each one waits for the previous to actually land
+          // on disk before the next is issued. Without this, write() calls
+          // queue up far faster than the disk can drain them (data channel
+          // delivery isn't throttled to disk speed), so the eventual close()
+          // at the end has to flush a huge backlog -- that's what shows up
+          // as a long "Saving to disk..." pause on large files.
+          const chunk = event.data;
+          const writer = incomingWriter;
+          incomingWriteChain = incomingWriteChain
+            .then(() => writer.write(chunk))
+            .then(() => { incomingWritten += chunk.byteLength; })
+            .catch(() => {});
         } else {
           incomingFileData.push(event.data);
         }
@@ -1702,6 +1715,8 @@
     const info = incomingFileInfo;
     downloadAbort = false;
     incomingReceived = 0;
+    incomingWritten = 0;
+    incomingWriteChain = Promise.resolve();
     incomingStartTime = Date.now();
     incomingWriter = null;
     incomingFileData = [];
@@ -1731,6 +1746,7 @@
       dataChannel.send(JSON.stringify({ type: "file-cancel", transferId }));
     }
     if (incomingWriter) { try { incomingWriter.abort(); } catch (e) {} incomingWriter = null; }
+    incomingWriteChain = Promise.resolve();
     incomingFileData = [];
     finishTransferProgress(transferId, "Cancelled");
     incomingFileInfo = null;
@@ -1741,17 +1757,24 @@
     if (!info) return;
 
     if (incomingWriter) {
+      const writer = incomingWriter;
+      const textElement = document.getElementById(`transfer-text-${info.transferId}`);
+      // Show real flush progress (bytes actually written vs total) while the
+      // write chain drains, instead of a generic "please wait" -- the chunks
+      // were all *received* already, this is just catching the disk writer up.
+      const progressTimer = textElement ? setInterval(() => {
+        const pct = info.size ? Math.min(100, Math.round((incomingWritten / info.size) * 100)) : 0;
+        textElement.innerHTML = `<span style='color: var(--amber);'>Saving to disk... ${pct}% (${formatBytes(incomingWritten)} / ${formatBytes(info.size)})</span>`;
+      }, 150) : null;
+
       try {
-        // UPDATE: Inject a progress notice before awaiting the final flush to disk.
-        const textElement = document.getElementById(`transfer-text-${info.transferId}`);
-        if (textElement) {
-          textElement.innerHTML = "<span style='color: var(--amber);'>Saving to disk... please wait.</span>";
-        }
-        
-        await incomingWriter.close();
+        await incomingWriteChain; // every chunk lands on disk, in order, before we close
+        await writer.close();
         addMsg(`<strong>File saved:</strong> ${info.name}`, "them");
       } catch (e) {
         addMsg(`Something went wrong saving ${info.name}: ${e && e.message ? e.message : e}`, "sys");
+      } finally {
+        if (progressTimer) clearInterval(progressTimer);
       }
       incomingWriter = null;
     } else {
