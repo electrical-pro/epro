@@ -609,6 +609,9 @@
   let incomingWriter = null;      // streaming disk writer, when the browser supports it
   let incomingWriteChain = Promise.resolve(); // serializes writer.write() calls for backpressure
   let incomingWritten = 0;        // bytes actually flushed to the writer (vs just received)
+  const WRITE_BATCH_SIZE = 1024 * 1024; // batch chunks before hitting the disk writer
+  let pendingWriteBuf = [];       // chunks accumulated since the last flush to the writer
+  let pendingWriteBytes = 0;
   let incomingReceived = 0;
   let incomingStartTime = 0;
   let downloadAbort = false;
@@ -773,6 +776,29 @@
     } else if (ws && ws.readyState === WebSocket.OPEN && room) {
       sendSignal({ kind: "ack", id });
     }
+  }
+
+  // File-receive write batching -----------------------------------------
+  // writer.write() also has real per-call overhead. Instead of one write per
+  // 16KB wire chunk, accumulate chunks and flush to the disk writer in
+  // ~1MB batches -- same idea as the sender's read-ahead, applied in reverse.
+  function queueChunkForWrite(chunk) {
+    pendingWriteBuf.push(chunk);
+    pendingWriteBytes += chunk.byteLength;
+    if (pendingWriteBytes >= WRITE_BATCH_SIZE) flushWriteBatch();
+  }
+
+  function flushWriteBatch() {
+    if (!pendingWriteBuf.length || !incomingWriter) return;
+    const batch = pendingWriteBuf;
+    const batchBytes = pendingWriteBytes;
+    pendingWriteBuf = [];
+    pendingWriteBytes = 0;
+    const writer = incomingWriter;
+    incomingWriteChain = incomingWriteChain
+      .then(() => writer.write(new Blob(batch)))
+      .then(() => { incomingWritten += batchBytes; })
+      .catch(() => {});
   }
 
   // Shared handler for an incoming chat message from either transport.
@@ -1223,18 +1249,7 @@
         if (!incomingFileInfo || downloadAbort) return; 
         incomingReceived += event.data.byteLength;
         if (incomingWriter) {
-          // Chain writes so each one waits for the previous to actually land
-          // on disk before the next is issued. Without this, write() calls
-          // queue up far faster than the disk can drain them (data channel
-          // delivery isn't throttled to disk speed), so the eventual close()
-          // at the end has to flush a huge backlog -- that's what shows up
-          // as a long "Saving to disk..." pause on large files.
-          const chunk = event.data;
-          const writer = incomingWriter;
-          incomingWriteChain = incomingWriteChain
-            .then(() => writer.write(chunk))
-            .then(() => { incomingWritten += chunk.byteLength; })
-            .catch(() => {});
+          queueChunkForWrite(event.data);
         } else {
           incomingFileData.push(event.data);
         }
@@ -1677,19 +1692,42 @@
     dc.bufferedAmountLowThreshold = BUFFER_LOW_WATERMARK;
     showTransferProgress(transferId, `Sending ${file.name}`, "me");
 
+    // Blob.slice().arrayBuffer() has real per-call overhead (it crosses into
+    // the browser's file I/O machinery) -- on a fast local network that
+    // overhead, not the network itself, is usually what makes transfers feel
+    // slow. So we read in much bigger blocks and prefetch the next block
+    // while the current one is being sent, but still put FILE_CHUNK_SIZE
+    // (16KB) pieces on the wire, since larger single dataChannel messages
+    // aren't reliably supported across browsers.
+    const READ_BLOCK_SIZE = 1024 * 1024;
+    const readBlock = (start) => file.slice(start, Math.min(start + READ_BLOCK_SIZE, total)).arrayBuffer();
+
+    let blockStart = 0;
+    let currentBlock = total > 0 ? await readBlock(0) : new ArrayBuffer(0);
+    let nextBlockPromise = (currentBlock.byteLength < total) ? readBlock(currentBlock.byteLength) : null;
+
     while (offset < total) {
       if (uploadAbort || dataChannel !== dc || dc.readyState !== "open") break;
+
+      const posInBlock = offset - blockStart;
+      if (posInBlock >= currentBlock.byteLength) {
+        blockStart += currentBlock.byteLength;
+        currentBlock = await nextBlockPromise;
+        nextBlockPromise = (blockStart + currentBlock.byteLength < total)
+          ? readBlock(blockStart + currentBlock.byteLength)
+          : null;
+        continue;
+      }
 
       if (dc.bufferedAmount > BUFFER_HIGH_WATERMARK) {
         await new Promise((resolve) => dc.addEventListener("bufferedamountlow", resolve, { once: true }));
         continue;
       }
 
-      const buf = await file.slice(offset, offset + FILE_CHUNK_SIZE).arrayBuffer();
-      if (uploadAbort || dataChannel !== dc || dc.readyState !== "open") break;
-
-      dc.send(buf);
-      offset += buf.byteLength;
+      const end = Math.min(posInBlock + FILE_CHUNK_SIZE, currentBlock.byteLength);
+      // A view into the already-in-memory block -- no extra copy, no IPC.
+      dc.send(new Uint8Array(currentBlock, posInBlock, end - posInBlock));
+      offset += (end - posInBlock);
 
       const now = Date.now();
       if (now - lastUiUpdate > 150 || offset >= total) {
@@ -1717,6 +1755,8 @@
     incomingReceived = 0;
     incomingWritten = 0;
     incomingWriteChain = Promise.resolve();
+    pendingWriteBuf = [];
+    pendingWriteBytes = 0;
     incomingStartTime = Date.now();
     incomingWriter = null;
     incomingFileData = [];
@@ -1747,6 +1787,8 @@
     }
     if (incomingWriter) { try { incomingWriter.abort(); } catch (e) {} incomingWriter = null; }
     incomingWriteChain = Promise.resolve();
+    pendingWriteBuf = [];
+    pendingWriteBytes = 0;
     incomingFileData = [];
     finishTransferProgress(transferId, "Cancelled");
     incomingFileInfo = null;
@@ -1768,6 +1810,7 @@
       }, 150) : null;
 
       try {
+        flushWriteBatch(); // any leftover partial batch under WRITE_BATCH_SIZE
         await incomingWriteChain; // every chunk lands on disk, in order, before we close
         await writer.close();
         addMsg(`<strong>File saved:</strong> ${info.name}`, "them");
