@@ -555,9 +555,9 @@
     <button id="videoToggleBtn" onclick="toggleVideo()">Start Video</button>
   </div>
 
-  <div id="videoRow" class="hidden" style="display: flex;">
-    <video id="localVideo" class="hidden" autoplay muted playsinline></video>
-    <video id="remoteVideo" class="hidden" autoplay playsinline></video>
+  <div id="videoRow" class="av-hidden">
+    <video id="localVideo" class="av-hidden" autoplay muted playsinline></video>
+    <video id="remoteVideo" class="av-hidden" autoplay playsinline></video>
   </div>
 
   <p class="dropHint">📎 Drag and drop files here, or use the attach button (needs a direct P2P connection)</p>
@@ -1150,8 +1150,8 @@
     const row = document.getElementById("videoRow");
     const lv = document.getElementById("localVideo");
     const rv = document.getElementById("remoteVideo");
-    const anyVisible = !lv.classList.contains("hidden") || !rv.classList.contains("hidden");
-    row.classList.toggle("hidden", !anyVisible);
+    const anyVisible = !lv.classList.contains("av-hidden") || !rv.classList.contains("av-hidden");
+    row.classList.toggle("av-hidden", !anyVisible);
   }
 
   function handleRemoteCallState(mode) {
@@ -1159,17 +1159,17 @@
     remoteCallMode = mode;
     const remoteVideo = document.getElementById("remoteVideo");
     if (mode === "video") {
-      remoteVideo.classList.remove("hidden");
+      remoteVideo.classList.remove("av-hidden");
       updateVideoRowVisibility();
       remoteVideo.play().catch(() => {});
       if (callMode === "off") startCall("video");
     } else if (mode === "audio") {
-      remoteVideo.classList.add("hidden");
+      remoteVideo.classList.add("av-hidden");
       updateVideoRowVisibility();
       remoteVideo.play().catch(() => {});
       if (callMode === "off") startCall("audio");
     } else {
-      remoteVideo.classList.add("hidden");
+      remoteVideo.classList.add("av-hidden");
       updateVideoRowVisibility();
       if (callMode !== "off") stopCall();
     }
@@ -1178,7 +1178,7 @@
   function resetRemoteVideo() {
     const rv = document.getElementById("remoteVideo");
     rv.srcObject = null;
-    rv.classList.add("hidden");
+    rv.classList.add("av-hidden");
     remoteCallMode = "off";
     updateVideoRowVisibility();
   }
@@ -1192,10 +1192,10 @@
     const localVideo = document.getElementById("localVideo");
     if (videoTrack) {
       localVideo.srcObject = localStream;
-      localVideo.classList.remove("hidden");
+      localVideo.classList.remove("av-hidden");
     } else {
       localVideo.srcObject = null;
-      localVideo.classList.add("hidden");
+      localVideo.classList.add("av-hidden");
     }
     updateVideoRowVisibility();
   }
@@ -1469,7 +1469,7 @@
     if (audioTransceiver) { try { await audioTransceiver.sender.replaceTrack(null); } catch (e) {} }
     if (videoTransceiver) { try { await videoTransceiver.sender.replaceTrack(null); } catch (e) {} }
     document.getElementById("localVideo").srcObject = null;
-    document.getElementById("localVideo").classList.add("hidden");
+    document.getElementById("localVideo").classList.add("av-hidden");
     callMode = "off";
     updateCallButtons();
     updateVideoRowVisibility();
