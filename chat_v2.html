@@ -8,9 +8,9 @@
 <title>P2P WebRTC Chat & File Transfer</title>
 <style>
   :root {
-    --bg: #0a0b0f;
+    --bg: #000000;
     --panel: #16181f;
-    --panel-2: #1b1e26;
+    --panel-2: #111318;
     --panel-3: #20232c;
     --border: #282b35;
     --border-strong: #383c49;
@@ -336,15 +336,16 @@
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   }
   .msg.me {
-    background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-    color: white;
+    background: linear-gradient(135deg, #263653, #2b3d5c);
+    color: #f5f7ff;
     margin-left: auto;
     border-bottom-right-radius: 4px;
   }
+
   .msg.them {
-    background: linear-gradient(135deg, var(--them-1), var(--them-2));
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: #f5f6fb;
+    background: linear-gradient(135deg, #293b43, #3a3048);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    color: #f1f3f7;
     margin-right: auto;
     border-bottom-left-radius: 4px;
   }
@@ -374,6 +375,7 @@
     font-size: 0.72em;
     opacity: 0.85;
   }
+  .msg.them .msg-status { justify-content: flex-start; }
   .tick { font-style: normal; }
   .tick-pending { opacity: 0.7; }
   .tick-delivered { color: #bfe8ff; font-weight: 700; }
@@ -551,12 +553,12 @@
   </div>
   <audio id="remoteAudio" autoplay></audio>
 
-  <p class="dropHint">📎 Drag and drop files here, or use the attach button (needs a direct P2P connection)</p>
+  <p class="dropHint">➕ Drag and drop files here, or use the attach button (needs a direct P2P connection)</p>
 
   <div id="chatBox"></div>
   <div class="chat-input-row">
     <input type="file" id="fileInput" class="hidden" onchange="handleFileSelect(event)">
-    <button class="icon-btn" onclick="document.getElementById('fileInput').click()" title="Attach File">📎</button>
+    <button class="icon-btn" onclick="document.getElementById('fileInput').click()" title="Attach File">➕</button>
     <input type="text" id="msgInput" placeholder="Type a message..." onkeypress="if(event.key === 'Enter') sendMsg()">
     <button class="send-btn" onclick="sendMsg()">Send</button>
   </div>
@@ -606,6 +608,9 @@
   let incomingReceived = 0;
   let incomingStartTime = 0;
   let downloadAbort = false;
+
+  let swRegistration = null;      // registered download-bridge Service Worker, if any
+  let swReady = false;            // true once it's active and controlling this page
 
   const FILE_CHUNK_SIZE = 16384;
   const BUFFER_HIGH_WATERMARK = 1024 * 1024;
@@ -680,9 +685,13 @@
     return div;
   }
 
+  function viaLabelText(via) {
+    return via === "p2p" ? "p2p" : via === "relay" ? "via server" : "";
+  }
+
   function msgStatusHtml(delivered, via) {
     if (delivered) {
-      const viaLabel = via === "p2p" ? "direct" : via === "relay" ? "via relay" : "";
+      const viaLabel = viaLabelText(via);
       return `<span class="tick tick-delivered" title="Delivered -- confirmed by peer">&#10003;</span>${viaLabel ? `<span class="via-label">${viaLabel}</span>` : ""}`;
     }
     return `<span class="tick tick-pending" title="Not yet delivered">⏳ pending</span>`;
@@ -795,7 +804,7 @@
   // Shared handler for an incoming chat message from either transport.
   // Dedupes by id so a resend (e.g. our earlier ack got lost) can't post
   // the same message twice, but still re-acks so the sender stops retrying.
-  function handleIncomingChatMessage(text, id) {
+  function handleIncomingChatMessage(text, id, via) {
     if (id) {
       if (seenMessageIds.has(id)) {
         sendAck(id);
@@ -803,7 +812,9 @@
       }
       seenMessageIds.add(id);
     }
-    addMsg(text, "them");
+    const viaLabel = viaLabelText(via);
+    const statusHtml = viaLabel ? `<div class="msg-status"><span class="via-label">${viaLabel}</span></div>` : "";
+    addMsg(`<div class="msg-text">${text}</div>${statusHtml}`, "them");
     if (id) sendAck(id);
   }
 
@@ -912,7 +923,7 @@
     if (!msg || msg.room !== room) return;
 
     if (msg.kind === "chat") {
-      handleIncomingChatMessage(msg.text, msg.id);
+      handleIncomingChatMessage(msg.text, msg.id, "relay");
     } else if (msg.kind === "ack") {
       if (msg.id) markMessageDelivered(msg.id);
     } else if (msg.kind === "hello" && role === "host") {
@@ -1293,7 +1304,7 @@
           if (typeof msg.mode === "string") handleRemoteCallState(msg.mode);
         }
         else if (msg.type === "chat") {
-          handleIncomingChatMessage(msg.text, msg.id);
+          handleIncomingChatMessage(msg.text, msg.id, "p2p");
         }
         else if (msg.type === "ack") {
           if (msg.id) markMessageDelivered(msg.id);
@@ -1759,6 +1770,92 @@
     uploadTransferId = null;
   }
 
+  // ---------------------------------------------------------------------
+  // Native-download-bar streaming via a Service Worker (StreamSaver-style).
+  //
+  // The File System Access API (below) gives Chrome/Edge a real streaming
+  // save-to-disk writer, but Firefox and Safari don't implement it -- their
+  // only fallback used to be buffering the whole file in memory as a Blob.
+  // This adds a middle tier for those browsers: a Service Worker "claims" a
+  // same-origin URL (/sw-download/<token>) and answers its own fetch event
+  // with a ReadableStream we feed manually as data-channel chunks arrive.
+  // The browser has no idea it's not a real network response, so it uses
+  // its normal streaming download path -- native downloads-bar progress,
+  // no save dialog, and nothing held in memory beyond the current batch.
+  //
+  // Requires a secure context (https, or localhost) served over http(s) --
+  // it silently does nothing when the page is opened as a local file://.
+  async function initDownloadServiceWorker() {
+    if (!("serviceWorker" in navigator) || !window.isSecureContext) return;
+    try {
+      const reg = await navigator.serviceWorker.register("./sw-download.js", { scope: "./" });
+      await navigator.serviceWorker.ready;
+      swRegistration = reg;
+      swReady = !!navigator.serviceWorker.controller;
+    } catch (e) {
+      swReady = false;
+    }
+  }
+  initDownloadServiceWorker();
+
+  // Opens a MessageChannel to the download Service Worker, registers a
+  // token for this file, then "clicks" a same-origin link to that token's
+  // URL so the browser's native download machinery picks it up. Resolves
+  // to a writer with the same {write(blob), close(), abort()} shape as a
+  // FileSystemWritableFileStream, so the rest of the receive pipeline
+  // doesn't need to know which tier it's talking to.
+  function createServiceWorkerWriter(info) {
+    return new Promise((resolve, reject) => {
+      if (!swReady || !navigator.serviceWorker.controller) { reject(new Error("sw-unavailable")); return; }
+
+      const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+      const channel = new MessageChannel();
+      const port = channel.port1;
+
+      const timeout = setTimeout(() => {
+        port.onmessage = null;
+        reject(new Error("sw-timeout"));
+      }, 4000);
+
+      port.onmessage = (event) => {
+        if (!event.data || event.data.type !== "ready") return;
+        clearTimeout(timeout);
+        port.onmessage = null;
+
+        resolve({
+          write(blob) {
+            return blob.arrayBuffer().then((buf) => port.postMessage({ type: "chunk", data: buf }, [buf]));
+          },
+          close() {
+            port.postMessage({ type: "close" });
+            return Promise.resolve();
+          },
+          abort() {
+            try { port.postMessage({ type: "abort" }); } catch (e) {}
+          }
+        });
+
+        const downloadUrl = new URL(`sw-download/${token}`, swRegistration.scope).href;
+        const a = document.createElement("a");
+        a.href = downloadUrl;
+        a.download = info.name; // hint only -- Content-Disposition is what actually forces it
+        a.rel = "noopener";
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      };
+
+      navigator.serviceWorker.controller.postMessage({
+        type: "register-download",
+        token,
+        filename: info.name,
+        size: info.size,
+        mimeType: info.type || "application/octet-stream"
+      }, [channel.port2]);
+    });
+  }
+
   window.acceptFileTransfer = async function(transferId) {
     if (!incomingFileInfo || incomingFileInfo.transferId !== transferId) return;
     const info = incomingFileInfo;
@@ -1783,6 +1880,14 @@
           return;
         }
         incomingWriter = null; 
+      }
+    }
+
+    if (!incomingWriter && swReady && navigator.serviceWorker.controller) {
+      try {
+        incomingWriter = await createServiceWorkerWriter(info);
+      } catch (e) {
+        incomingWriter = null; // falls through to the in-memory Blob tier below
       }
     }
 
