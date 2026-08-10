@@ -258,6 +258,8 @@
   .badge.state-connecting { background: var(--amber-soft); border-color: rgba(244, 185, 66, 0.3); color: #f6d493; }
   .badge.state-connecting .dot { background: var(--amber); animation: pulse 1.3s ease-in-out infinite; }
   .badge.state-offline, .badge.state-failed { background: var(--red-soft); border-color: rgba(240, 73, 94, 0.3); color: #f6aab2; }
+  .badge.state-relay { background: var(--accent-soft); border-color: rgba(79, 140, 255, 0.35); color: #a9c6ff; }
+  .badge.state-relay .dot { background: var(--accent); box-shadow: 0 0 8px 0 rgba(79, 140, 255, 0.6); }
   .badge.state-offline .dot, .badge.state-failed .dot { background: var(--red); }
 
   @keyframes pulse {
@@ -543,7 +545,6 @@
 
   <div id="connBadges">
     <span id="wsBadge" class="badge state-offline"><span class="dot"></span><span class="label">Signaling: offline</span></span>
-    <span id="p2pBadge" class="badge state-offline"><span class="dot"></span><span class="label">P2P: not connected</span></span>
     <span id="peerBadge" class="badge state-offline"><span class="dot"></span><span class="label">Peer: not connected</span></span>
   </div>
 
@@ -819,16 +820,9 @@
     setBadge("wsBadge", state, labels[state] || state);
   };
 
-  const updateP2pBadge = (state) => {
-    const labels = {
-      offline: "P2P: not connected",
-      connecting: "P2P: connecting...",
-      connected: "P2P: connected (direct)",
-      failed: "P2P: unavailable (using relay)"
-    };
-    setBadge("p2pBadge", state, labels[state] || state);
-  };
-
+  // Single combined peer indicator: offline / waiting / online (P2P) / online (relay only).
+  // "Online (P2P)" requires the data channel to actually be open right now, not just a
+  // recent heartbeat -- a heartbeat merely proves the peer is reachable on *some* channel.
   const updatePeerBadge = () => {
     if (!lastPeerHeartbeat) {
       setBadge("peerBadge", "connecting", "Peer: waiting...");
@@ -837,8 +831,13 @@
     const age = Date.now() - lastPeerHeartbeat;
     if (age > HEARTBEAT_TIMEOUT_MS) {
       setBadge("peerBadge", "offline", "Peer: offline");
+      return;
+    }
+    const p2pOpen = !!(dataChannel && dataChannel.readyState === "open" && pc && pc.connectionState === "connected");
+    if (p2pOpen) {
+      setBadge("peerBadge", "live", "Peer: online (P2P)");
     } else {
-      setBadge("peerBadge", "live", `Peer: online (${lastHeartbeatVia === "p2p" ? "P2P" : "relay"})`);
+      setBadge("peerBadge", "relay", "Peer: online (relay only)");
     }
   };
 
@@ -1007,22 +1006,22 @@
       if (pc !== myPc) return;
       const state = myPc.connectionState;
       if (state === "connected") {
-        updateP2pBadge("connected");
+        updatePeerBadge();
         setAnnounce(null);
         inProgress = false;
         clearTimeout(buildTimeoutTimer);
         clearTimeout(watchdogTimer);
         updateIpLink(myPc);
       } else if (state === "connecting" || state === "new") {
-        updateP2pBadge("connecting");
+        updatePeerBadge();
         hideIpLink();
       } else if (state === "failed" || state === "closed") {
-        updateP2pBadge("failed");
+        updatePeerBadge();
         clearTimeout(watchdogTimer);
         hideIpLink();
         triggerReconnect(myPc);
       } else if (state === "disconnected") {
-        updateP2pBadge("failed");
+        updatePeerBadge();
         clearTimeout(watchdogTimer);
         hideIpLink();
         watchdogTimer = setTimeout(() => {
@@ -1193,7 +1192,7 @@
 
     dc.onopen = () => {
       if (dataChannel !== dc) return;
-      updateP2pBadge("connected");
+      updatePeerBadge();
       addMsg(everConnected ? "Direct P2P link re-established." : "Direct P2P link established. Chat and files now go peer-to-peer.", "sys");
       everConnected = true;
       if (callMode !== "off") dc.send(JSON.stringify({ type: "call-state", mode: callMode }));
@@ -1202,7 +1201,7 @@
 
     dc.onclose = () => {
       if (dataChannel !== dc) return;
-      updateP2pBadge("failed");
+      updatePeerBadge();
       if (incomingFileInfo) {
         if (incomingWriter) { try { incomingWriter.abort(); } catch (e) {} incomingWriter = null; }
         incomingFileData = [];
@@ -1292,7 +1291,7 @@
     if (pc) { try { pc.close(); } catch (e) {} }
     pc = null;
     resetRemoteVideo();
-    updateP2pBadge("offline");
+    updatePeerBadge();
     updateStatus(message);
   }
 
@@ -1324,7 +1323,7 @@
 
     localSdp = myPc.localDescription.sdp;
     sdpKind = "offer";
-    updateP2pBadge("connecting");
+    updatePeerBadge();
     updateStatus(everConnected
       ? "Re-negotiating direct connection..."
       : "Room is live -- you can chat now. Waiting for your friend to establish a direct P2P link...");
@@ -1366,7 +1365,7 @@
       setupDataChannel(dataChannel);
     };
 
-    updateP2pBadge("connecting");
+    updatePeerBadge();
     updateStatus(everConnected ? "Reconnecting to host..." : "Connected to signaling. Waiting for host...");
     setAnnounce(() => sendSignal({ kind: "hello" }));
   }
@@ -1403,7 +1402,7 @@
 
     localSdp = targetPc.localDescription.sdp;
     sdpKind = "answer";
-    updateP2pBadge("connecting");
+    updatePeerBadge();
     updateStatus("Answer sent. Establishing direct connection...");
     setAnnounce(() => sendSignal({ kind: "answer", sdp: localSdp, sess: msg.sess }));
   }
