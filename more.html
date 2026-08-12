@@ -676,11 +676,11 @@
   
   .table-row {
     display: flex; flex-direction: column; gap: 4px;
-    padding: var(--row-edge-pad) 0; border-bottom: 1px solid var(--border);
+    padding: 4px 0; border-bottom: 1px solid var(--border);
     text-decoration: none; color: var(--text-main); transition: var(--transition);
   }
   .table-row:last-child { border-bottom: none; padding-bottom: 0; }
-  .table-row:hover { padding-left: 8px; color: var(--info); }
+  .table-row:hover { padding-left: 2px; color: var(--info); }
   .table-addr { font-size: 12px; color: var(--info); font-family: monospace; }
   .table-desc { font-size: 13px; }
 
@@ -1727,7 +1727,7 @@ const CONFIG = {
         { url: 'littlefs', desc: 'File Manager (LittleFS)', icon: '📁' },
         { url: 'env.html', desc: 'Environment Monitor', icon: '🌿' },
         { url: 'buzzer_test.html', desc: 'Test Buzzer', icon: '🔔' },
-        { url: 'json_view.html', desc: 'JSON Viewer', icon: '🧬' },
+        { url: 'json_view.html?feed=control_state&interval=1000', desc: 'JSON Viewer (main)', icon: '🧬' },
         { url: 'power_monitor.html', desc: 'Power Reference', icon: '⚡' },
       ]
     },
@@ -1758,21 +1758,8 @@ const CONFIG = {
         { url: 'listAP', desc: 'Scan nearby WiFi APs', icon: '🔍' },
         { url: 'IP_History', desc: 'Connected devices IP list', icon: '🖥️' },
         { url: 'info', desc: 'ESP System Information', icon: '⚙️' },
+        { url: 'json_view.html?feed=system&interval=1000', desc: 'JSON Viewer (system)', icon: '🧬' },
         { action: 'restart', desc: 'Restart ESP Device', icon: '🔄' }
-      ]
-    },
-    {
-      id: 'html_data',
-      title: 'SmartData Pages',
-      icon: '📝',
-      type: 'table',
-      items: [
-        { url: '', desc: 'Root' },
-        { url: 'control_WS_css_V2_7.html', desc: 'Legacy WS (default)' },
-        { url: 'ctrl_non_ws.html?update=500', desc: 'Non-WebSocket UI Deflate' },
-        { url: 'control_WS_css_V2_7_Deflate.html?update=500', desc: 'WebSocket UI Deflate' },
-        { url: 'smartData', desc: 'Get SmartData HTML' },
-        { url: 'smartDataCompressed', desc: 'Compressed SmartData HTML' },
       ]
     },
     {
@@ -1781,10 +1768,12 @@ const CONFIG = {
       icon: '🗄️',
       type: 'table',
       items: [
+        { url: '', desc: 'Root' },
         { url: 'mainLight?set=100', desc: 'API: Set Main Light (0-100)' },
         { url: 'IR?Blast=20DF906F', desc: 'API: Transmit IR Code' },
         { url: 'bms_raw', desc: 'API: Get RAW HEX from BMS' },
         { url: 'control_state', desc: 'API: Main JSON endpoint' },
+        { url: 'system', desc: 'API: System JSON endpoint' },
         { url: 'pressureArray', desc: '1-Hour Pressure'},
         { url: 'testDisplays', desc: 'Test 7 seg displays' },
         { url: 'https://electrical-pro.github.io/epro/berezan.html', desc: "Berezan' Weather" }
