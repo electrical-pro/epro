@@ -1338,7 +1338,7 @@ const MyTelem = {
         lines.push('Fire Alarm I2C: ' + this.pl('ERROR', MyTelem.RED));
       } else {
         const val = parseFloat(fi.resultComp);
-        const tag = val > 65 ? this.pl(`FIRE | ${fi.resultComp} | ${fi.resultCompLive}`, MyTelem.RED) : this.pl(`OK | ${fi.resultComp} | ${fi.resultCompLive}`, MyTelem.GREEN);
+        const tag = val > fi.tgv ? this.pl(`FIRE | ${fi.resultComp} | ${fi.resultCompLive}`, MyTelem.RED) : this.pl(`OK | ${fi.resultComp} | ${fi.resultCompLive}`, MyTelem.GREEN);
         lines.push('Fire Alarm I2C: ' + tag);
       }
     }
@@ -1510,7 +1510,7 @@ const MyTelem = {
             add('fireI2C', '🔥 Fire Alarm I2C: ERROR', 'danger');
         } else {
             const val = parseFloat(fi.resultComp);
-            if (val > 65) {
+            if (val > fi.tgv) {
                 add('fireI2C', `🔥 Fire Alarm I2C: FIRE | ${fi.resultComp} | ${fi.resultCompLive}`, 'danger');
             }
         }
@@ -1737,13 +1737,13 @@ const CONFIG = {
       icon: '📐',
       type: 'links',
       items: [
-        { url: 'chart.html?type=co2', desc: 'CO2 Levels', icon: '🌫️' },
-        { url: 'chart.html?type=temp', desc: 'Temperature', icon: '🌡️' },
-        { url: 'chart.html?type=humidity', desc: 'Humidity', icon: '💧' },
-        { url: 'chart.html?type=pressure', desc: 'Atmospheric Pressure', icon: '⏱️' },
-        { url: 'chart.html?type=mains', desc: 'AC Mains', icon: '⚡' },
-        { url: 'chart.html?type=bms', desc: 'BMS Status', icon: '🔋' },
-        { url: 'chart.html?type=heap', desc: 'Free Heap', icon: '🧠' }
+        { url: 'chart.html?feed=control_state&type=co2', desc: 'CO2 Levels', icon: '🌫️' },
+        { url: 'chart.html?feed=control_state&type=temp', desc: 'Temperature', icon: '🌡️' },
+        { url: 'chart.html?feed=control_state&type=humidity', desc: 'Humidity', icon: '💧' },
+        { url: 'chart.html?feed=control_state&type=pressure', desc: 'Atmospheric Pressure', icon: '⏱️' },
+        { url: 'chart.html?feed=control_state&type=mains', desc: 'AC Mains', icon: '⚡' },
+        { url: 'chart.html?feed=control_state&type=bms', desc: 'BMS Status', icon: '🔋' },
+        { url: 'chart.html?feed=control_state&type=heap', desc: 'Free Heap', icon: '🧠' }
       ]
     },
     {
