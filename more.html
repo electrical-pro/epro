@@ -1488,6 +1488,11 @@ const MyTelem = {
 
       if (war.chem === true) add('chem', '☣️ CHEMICAL ATTACK', 'danger');
       if (war.nuke === true) add('nuke', '☢️ NUCLEAR ATTACK', 'danger');
+
+      if (war.level === "YELLOW") add('lev_y', '🟡 YELLOW LEVEL', 'warn');
+      else if (war.level === "RED") add('lev_r', '🔴 RED LEVEL', 'danger');
+      else if (war.level === "GREEN") {} // do nothing
+      else add('lev_u', '⚠️ UNKNOWN LEVEL', 'info');
       
     }
 
