@@ -278,7 +278,7 @@ $(document).ready(function()
    var fieldList= sentFieldList;
    var channelIndex = sentChannelIndex;
    // get the Channel data with a webservice call
- 	$.getJSON('https://api.thingspeak.com/channels/'+channelNumber+'/feed.json?callback=jQuery&amp;offset=0&amp;results=2500;key='+key, function(data) 
+ 	$.getJSON('https://api.thingspeak.com/channels/'+channelNumber+'/feed.json?offset=0&results=2500&api_key='+key, function(data) 
    {
 	   // if no access
 	   if (data == '-1') {
@@ -568,55 +568,47 @@ function loadOneChannel(){
 
 // load next 8000 points from a ThingSpeak channel and addPoints to a series
 function loadChannelHistory(sentChannelIndex,channelNumber,key,sentFieldList,sentNumLoads,maxLoads) {
-   var numLoads=sentNumLoads
-   var fieldList= sentFieldList;
-   var channelIndex = sentChannelIndex;
-   var first_Date = new Date();
-   if (typeof fieldList[0].data[0] != "undefined") first_Date.setTime(fieldList[0].data[0][0]+7*60*60*1000);//adjust for 7 hour difference from GMT (Zulu time)
-   else if (typeof fieldList[1].data[0] != "undefined") first_Date.setTime(fieldList[1].data[0][0]+7*60*60*1000);
-   else if (typeof fieldList[2].data[0] != "undefined") first_Date.setTime(fieldList[2].data[0][0]+7*60*60*1000);
-   else if (typeof fieldList[3].data[0] != "undefined") first_Date.setTime(fieldList[3].data[0][0]+7*60*60*1000);
-   else if (typeof fieldList[4].data[0] != "undefined") first_Date.setTime(fieldList[4].data[0][0]+7*60*60*1000);
-   else if (typeof fieldList[5].data[0] != "undefined") first_Date.setTime(fieldList[5].data[0][0]+7*60*60*1000);
-   else if (typeof fieldList[6].data[0] != "undefined") first_Date.setTime(fieldList[6].data[0][0]+7*60*60*1000);
-   else if (typeof fieldList[7].data[0] != "undefined") first_Date.setTime(fieldList[7].data[0][0]+7*60*60*1000);
-   var end = first_Date.toJSON();
-   window.console && console.log('earliest date:',end);
-   window.console && console.log('sentChannelIndex:',sentChannelIndex);
-   window.console && console.log('numLoads:',numLoads);
-   // get the Channel data with a webservice call
- 	$.getJSON('https://api.thingspeak.com/channels/'+channelNumber+'/feed.json?callback=jQuery&amp;offset=0&amp;start=2013-01-20T00:00:00;end='+end+';key='+key, function(data) 
-   {
-	   // if no access
-	   if (data == '-1') {
-       $('#chart-container').append('This channel is not public.  To embed charts, the channel must be public or a read key must be specified.');
-       window.console && console.log('Thingspeak Data Loading Error');
-     }
-     for (var fieldIndex=0; fieldIndex<fieldList.length; fieldIndex++)  // iterate through each field
-     {
-       //fieldList[fieldIndex].data =[];
-       for (var h=0; h<data.feeds.length; h++)  // iterate through each feed (data point)
-       {
-         var p = []//new Highcharts.Point();
-         var fieldStr = "data.feeds["+h+"].field"+fieldList[fieldIndex].field;
-		  	 var v = eval(fieldStr);
- 		  	p[0] = getChartDate(data.feeds[h].created_at);
-	 	  	p[1] = parseFloat(v);
-	 	  	// if a numerical value exists add it
-	   		if (!isNaN(parseInt(v))) { fieldList[fieldIndex].data.push(p); }
-       }
-       fieldList[fieldIndex].data.sort(function(a,b){return a[0]-b[0]});
-       dynamicChart.series[fieldList[fieldIndex].series].setData(fieldList[fieldIndex].data,false);
-       //dynamicChart.series[fieldList[fieldIndex].series].addPoint(fieldList[fieldIndex].data,false);
-       //fieldList[fieldIndex].name = eval("data.channel.field"+fieldList[fieldIndex].field);
-       //window.console && console.log('data added to series:',fieldList[fieldIndex].series,fieldList[fieldIndex].data);
-	   }
-     channelKeys[channelIndex].fieldList=fieldList;
-     dynamicChart.redraw()
-     window.console && console.log('channel index:',channelIndex);
-     numLoads++;
-     if (numLoads<maxLoads) {loadChannelHistory(channelIndex,channelNumber,key,fieldList,numLoads,maxLoads);}
-	 });
+  var numLoads = sentNumLoads;
+  var fieldList = sentFieldList;
+  var channelIndex = sentChannelIndex;
+
+  // find earliest loaded timestamp across fields (chart time -> real UTC)
+  var earliest = null;
+  for (var i = 0; i < fieldList.length; i++) {
+    var d = fieldList[i].data;
+    if (d && d.length && (earliest === null || d[0][0] < earliest)) earliest = d[0][0];
+  }
+  var endDate = new Date(earliest !== null ? earliest + myOffset*60000 - 1000 : Date.now());
+  // ThingSpeak format: YYYY-MM-DD HH:NN:SS (UTC)
+  var end = endDate.toISOString().slice(0,19).replace('T',' ');
+  window.console && console.log('loading history before (UTC):', end, 'load #', numLoads);
+
+  var url = 'https://api.thingspeak.com/channels/' + channelNumber + '/feed.json'
+          + '?api_key=' + key
+          + '&results=8000'
+          + '&end=' + encodeURIComponent(end);
+
+  $.getJSON(url, function(data) {
+    if (!data || !data.feeds || data.feeds.length === 0) {
+      window.console && console.log('no more history');
+      return;
+    }
+    for (var fieldIndex = 0; fieldIndex < fieldList.length; fieldIndex++) {
+      var f = fieldList[fieldIndex];
+      for (var h = 0; h < data.feeds.length; h++) {
+        var v = data.feeds[h]['field' + f.field];
+        if (v !== null && v !== undefined && !isNaN(parseFloat(v))) {
+          f.data.push([getChartDate(data.feeds[h].created_at), parseFloat(v)]);
+        }
+      }
+      f.data.sort(function(a,b){ return a[0]-b[0]; });
+      dynamicChart.series[f.series].setData(f.data, false);
+    }
+    channelKeys[channelIndex].fieldList = fieldList;
+    dynamicChart.redraw();
+    numLoads++;
+    if (numLoads < maxLoads) loadChannelHistory(channelIndex, channelNumber, key, fieldList, numLoads, maxLoads);
+  }).fail(function(){ window.console && console.log('history request failed'); });
 }
 
   </script>

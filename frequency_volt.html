@@ -3,11 +3,7 @@
   <head>
     <meta content="text/html; charset=UTF-8" http-equiv="content-type">
 	<meta name="theme-color" content="#031b26" />
-	<link rel="shortcut icon" type="image/png" href="https://www.highcharts.com/images/ico/favicon-16x16.png"/>
-	<link rel="shortcut icon" type="image/png" href="https://www.highcharts.com/images/ico/favicon-96x96.png"/>
-	<link rel="shortcut icon" type="image/png" href="https://www.highcharts.com/images/ico/favicon-32x32.png"/>
-	<link rel="shortcut icon" type="image/png" href="https://www.highcharts.com/images/ico/favicon-160x160.png"/>
-	<link rel="shortcut icon" type="image/png" href="https://www.highcharts.com/images/ico/favicon-192x192.png"/>
+  <link rel="shortcut icon" type="image/ico" href="https://wp-assets.highcharts.com/www-highcharts-com/blog/wp-content/uploads/2021/05/19085042/favicon-1.ico"/>
     
 	<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
 
@@ -17,9 +13,6 @@
 	
     <style>
 
-    
-    
-		 
       #buttonSSS {
         background-color:#004b5ef8;
         -moz-border-radius:6px;
@@ -100,8 +93,7 @@
 	
 Highcharts.setOptions({
 
-colors: ['#3366ff',  '#ff0000', '#f4740b', '#ff0066', 
-   '#FFFF33', '#e4d354', '#2b908f', '#f45b5b', '#91e8e1'],
+colors: ['#3366ff',  '#FFFF33', '#f4740b', '#ff0066', '#54e49e', '#2b908f', '#f45b5b', '#91e8e1'],
 
 
   chart: {
@@ -116,6 +108,7 @@ colors: ['#3366ff',  '#ff0000', '#f4740b', '#ff0066',
      },
      polar: true,
      type: 'area',
+	
 	 
 	 
 	 
@@ -134,7 +127,6 @@ colors: ['#3366ff',  '#ff0000', '#f4740b', '#ff0066',
         gridLineColor: '#333333', // chart line color
 		
 		labels: {
-		
             style: {
                 color: '#bfbfbf'
             }
@@ -219,12 +211,18 @@ var channelsLoaded = 0;
 // the 'T' Temperature left axis, or the 'O' Other right axis.
 var channelKeys =[];
 
-channelKeys.push({channelNumber:300978, name:'Pressure',key:'UAYSQJX8RLH1XLKV',
-   fieldList:[{field:7,axis:'P'}]});
-   
-channelKeys.push({channelNumber:300978, name:'OutSide',key:'UAYSQJX8RLH1XLKV',
-   fieldList:[{field:2,axis:'T'}]});
-    
+channelKeys.push({channelNumber:1577263, name:'Frequency',key:'5YWET4QMH9QYHWUE',
+   fieldList:[{field:1,axis:'T'}]});
+
+// Added first new channel - AC Voltage
+channelKeys.push({channelNumber:1288695, name:'AC Voltage',key:'KMPJJFINTMO4GWQK',
+   fieldList:[{field:1,axis:'V'}]});
+
+// Added second new channel - Frequency (from second source)
+channelKeys.push({channelNumber:1288695, name:'Frequency',key:'KMPJJFINTMO4GWQK',
+   fieldList:[{field:3,axis:'T'}]});
+
+
 // user's timezone offset
 var myOffset = new Date().getTimezoneOffset();
 
@@ -343,7 +341,7 @@ $(document).ready(function()
                (function(channelIndex)
                {
                 // get the data with a webservice call
-                $.getJSON('https://api.thingspeak.com/channels/'+channelKeys[channelIndex].channelNumber+'/feed/last.json?api_key='+channelKeys[channelIndex].key, function(data)  
+                $.getJSON('https://api.thingspeak.com/channels/'+channelKeys[channelIndex].channelNumber+'/feed/last.json?api_key='+channelKeys[channelIndex].key, function(data) 
                 { 
                   for (var fieldIndex=0; fieldIndex<channelKeys[channelIndex].fieldList.length; fieldIndex++)
                   {
@@ -463,9 +461,8 @@ rangeSelector: {
 			}
 		},
     tooltip: {
-      valueDecimals: 2,
-      valueSuffix: '',
-	
+      valueDecimals: 4,
+      valueSuffix: 'Hz',
 
 			// reformat the tooltips so that local times are displayed
 			//formatter: function() {
@@ -482,39 +479,40 @@ rangeSelector: {
 
       },
       title: {
-	  
         text: 'test'
 			}
 		},
-		
-		yAxis: [{
-		
-            title: {
-
-                text: 'Pressure / mmHg'
-				
-            },
-            id: 'P',
-            showEmpty: false,
-
+    yAxis: [{
+                title: {
+                    text: 'Frequency (Hz)'
+                },
+                id: 'T',
+                plotLines: [
+        {
+                color: '#358EF6',
+                width: 2,
+                value: 49.95,
+        },
+        {
+                color: '#F70366',
+                width: 2,
+                value: 50.05,
+        }],
     }, {
-	
             title: {
-                text: 'Temp / C'
-
+                text: 'AC Voltage (V)'
             },
-            
-            id: 'T',
-            showEmpty: false,
-    }, {
+            id: 'V',
+            opposite: true,  // This puts it on the right side
     }],
-					    plotOptions: {          ////////////////////////////////////////////////HERE What I DID
+		plotOptions: {          ////////////////////////////////////////////////HERE What I DID
         series: {
-            threshold: null,
-            fillOpacity: 0.3,
+			      fillOpacity: 0.3,
+            threshold: 50,
+            negativeColor: '#F70366',
             gapSize: 5
         }
-    },                                      ////////////////////////////////////////////////////////////////
+    },                                  ////////////////////////////////////////////////////////////////
 		exporting: {
 		  enabled: true,
       csv: {
@@ -638,7 +636,7 @@ function loadChannelHistory(sentChannelIndex,channelNumber,key,sentFieldList,sen
 }
 
   </script>
-    <title>SmartHome | Pressure and Temperature</title>
+    <title>SmartHome | Frequency</title>
   </head>
   <body style="                      background-color: #000000; color: white;">
     <div id="chart-container"><br>
