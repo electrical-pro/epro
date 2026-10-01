@@ -41,6 +41,20 @@
             padding: 15px;
         }
 
+        /* Add a pseudo-element for additional blur and darkening effect */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('https://i.pinimg.com/736x/02/cd/4a/02cd4ae491592508df49333a2c714290.jpg') no-repeat center center fixed;
+            background-size: cover;
+            filter: blur(8px) brightness(0.7);
+            /* z-index: -1; */
+        }
+
         .container {
             max-width: 900px;
             margin: 0 auto;
@@ -50,7 +64,7 @@
             text-align: center;
             margin-bottom: 25px;
             padding: 20px 15px;
-            background: var(--glass);
+            background: var(--card-bg);
             backdrop-filter: blur(10px);
             border-radius: 12px;
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -106,6 +120,29 @@
             font-size: 1.3rem;
             margin-right: 10px;
             color: var(--primary);
+        }
+
+        .gap-selector {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .gap-selector select {
+            background: rgba(255, 255, 255, 0.08);
+            color: inherit;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+
+        .gap-selector select option {
+            color: #000;
         }
 
         .card-header h2 {
@@ -401,6 +438,15 @@
                 <div class="card-header">
                     <i class="fas fa-table"></i>
                     <h2>Power / Blackout Periods</h2>
+                    <div class="gap-selector">
+                        <label for="gapThresholdSelect">Min gap:</label>
+                        <select id="gapThresholdSelect">
+                            <option value="2">2 min</option>
+                            <option value="5">5 min</option>
+                            <option value="10">10 min</option>
+                            <option value="15" selected>15 min</option>
+                        </select>
+                    </div>
                 </div>
                 
                 <div id="results">
@@ -451,11 +497,17 @@
         let allFeeds = [];
         let outageChart = null;
         let updateInterval;
-        const fiveMinutes = 15 * 60 * 1000; // 15 minutes in milliseconds
-        const twoMinutes = 2 * 60 * 1000; // 15 minutes in milliseconds
+        let gapThreshold = 15 * 60 * 1000; // gap detection threshold for the table/chart (selectable, default 15 min)
+        const twoMinutes = 2 * 60 * 1000; // live "no data" detection (unchanged)
         const UPDATE_INTERVAL = 60000; // 60 seconds
 
         document.addEventListener("DOMContentLoaded", function() {
+            // Gap threshold selector (2 / 5 / 10 / 15 min)
+            document.getElementById('gapThresholdSelect').addEventListener('change', function() {
+                gapThreshold = parseInt(this.value, 10) * 60 * 1000;
+                if (allFeeds.length > 0) processData();
+            });
+
             // Initial load with full dataset
             loadQuickPreview();
             
@@ -605,7 +657,7 @@
                 const currentTime = new Date(feeds[i].created_at).getTime();
                 const difference = currentTime - previousTime;
 
-                if (difference >= fiveMinutes) {
+                if (difference >= gapThreshold) {
                     const gapDurationMinutes = difference / (60 * 1000);
                     gaps.push({
                         start: feeds[i - 1].created_at,
