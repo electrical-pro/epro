@@ -45,18 +45,16 @@
         body::before {
             content: '';
             position: fixed;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-
-            background: url('https://i.pinimg.com/736x/02/cd/4a/02cd4ae491592508df49333a2c714290.jpg')
-                no-repeat center center;
+            inset: 0; /* Replaces top/left/width/height to lock to all viewport edges */
+            background: url('https://i.pinimg.com/736x/02/cd/4a/02cd4ae491592508df49333a2c714290.jpg') no-repeat center center;
             background-size: cover;
-
             filter: blur(8px) brightness(0.7);
-
             z-index: -1;
             pointer-events: none;
+
+            /* Force GPU rendering layer to eliminate scroll lag */
+            transform: translateZ(0);
+            will-change: transform;
         }
 
         .container {
