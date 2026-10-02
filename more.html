@@ -1028,6 +1028,20 @@ const MyTelem = {
 
       lines.push(`Power: ${db.W.toFixed(1)} W | ${db.W2.toFixed(1)} W | ${db.A.toFixed(2)} A | PF: ${(db.PF * 100).toFixed(0)} %`);
 
+      
+
+      if(db.W2.toFixed(1) - db.W.toFixed(1) > 0)
+      {
+        delta = this.pl('INJECTING', MyTelem.YELLOW);
+        lines.push(`Feeding: ${(db.W2.toFixed(1) - db.W.toFixed(1)).toFixed(1)} W ` + '⚡'+ delta);
+      }
+      else
+      {
+        delta = this.pl('DELTA', MyTelem.BLUE);
+        lines.push(`My Room: ${(db.W.toFixed(1) - db.W2.toFixed(1)).toFixed(1)} W ` + delta);
+      }
+      
+      
       let fTag = '';
       const F = db.HzEx;
       const F_low_res = db.Hz;
