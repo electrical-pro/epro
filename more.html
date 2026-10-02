@@ -1026,7 +1026,7 @@ const MyTelem = {
       else vTag = this.pl('EXTREMELY HIGH', MyTelem.RED);
       lines.push(`AC Voltage: ${V.toFixed(1)} V ` + vTag);
 
-      lines.push(`Power: ${db.W.toFixed(1)} W ${db.A.toFixed(2)} A | PF: ${(db.PF * 100).toFixed(0)} %`);
+      lines.push(`Power: ${db.W.toFixed(1)} W | ${db.W2.toFixed(1)} W | ${db.A.toFixed(2)} A | PF: ${(db.PF * 100).toFixed(0)} %`);
 
       let fTag = '';
       const F = db.HzEx;
