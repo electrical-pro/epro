@@ -1029,7 +1029,8 @@ const MyTelem = {
       lines.push(`Power: ${db.W.toFixed(1)} W ${db.A.toFixed(2)} A | PF: ${(db.PF * 100).toFixed(0)} %`);
 
       let fTag = '';
-      const F = db.Hz;
+      const F = db.HzEx;
+      const F_low_res = db.Hz;
       if (db.FreqExst) {
         if (F < 49.90) fTag = this.pl('EXTR. LOW', MyTelem.RED);
         else if (F < 49.92) fTag = this.pl('VERY LOW', MyTelem.ORANGE);
@@ -1040,7 +1041,7 @@ const MyTelem = {
         else fTag = this.pl('EXTR. HIGH', MyTelem.RED);
         lines.push(`Frequency: ${F.toFixed(4)} Hz ` + fTag);
       } else {
-        lines.push(`Frequency: ${F.toFixed(1)} Hz`);
+        lines.push(`Frequency: ${F_low_res.toFixed(1)} Hz`);
       }
     }
 
@@ -1482,9 +1483,10 @@ const MyTelem = {
       if (war.AirRaid)    add('airRaid', `AIR ALERT IN ${war.alertsTotal} REG`, 'danger');
       if (war.locations && war.locations.length > 4) add('warLocations', war.locations, 'danger');
       
-      if (war.hasAct)     add('HasActivity', '✈️ ACTIV', 'danger');
-      if (war.neptuneActive) add('local', '🚀 NEPTUN', 'danger');
-      if (war.rapid)      add('HasActivity', '🚀 RAPID', 'danger');
+      if (war.hasAct)     add('HasActivityFly', '✈️ ACTIV', 'danger');
+      if (war.neptuneActive) add('NeptunLocal', '🚀 NEPTUN', 'danger');
+      if (war.teleActive) add('teleActive', '🚀 TELE LOCAL', 'danger');
+      if (war.rapid)      add('HasActivityRapid', '🚀 RAPID', 'danger');
 
       if (war.chem === true) add('chem', '☣️ CHEMICAL ATTACK', 'danger');
       if (war.nuke === true) add('nuke', '☢️ NUCLEAR ATTACK', 'danger');
@@ -1705,7 +1707,8 @@ const CONFIG = {
           extra: [ { type: 'button', endpoint: 'IR?Blast=20DFA956', desc: 'LG TV Brightness', buttonText: 'Bright' } ] },
         { type: 'choice', endpoint: 'set_bat_mode', stateKey: 'BMS.batMode', icon: '🔌', desc: 'Charging mode', options: [{ v: 'auto_charging', l: 'Auto' }, { v: 'always_floating', l: 'Float' }] },
         { type: 'slider', endpoint: 'charge', stateKey: 'BMS.ask_chrg_prc', icon: '🔋', desc: 'Target charge', min: 0, max: 100, unit: '%' },
-        { type: 'slider', endpoint: 'fan', stateKey: 'fanSpeed', icon: '🌀', desc: 'Fan speed', min: 0, max: 100, step: 10, unit: '%' }
+        { type: 'slider', endpoint: 'fan', stateKey: 'fanSpeed', icon: '🌀', desc: 'Fan speed', min: 0, max: 100, step: 10, unit: '%' },
+        { type: 'slider', endpoint: 'InvInj', stateKey: 'Inv.inj', icon: '⚡', desc: 'Inject Power', min: 0, max: 255, step: 1, unit: '' }
       ]
     },
     {
