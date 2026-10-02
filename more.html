@@ -1030,15 +1030,15 @@ const MyTelem = {
 
       
 
-      if(db.W2.toFixed(1) - db.W.toFixed(1) > 0)
+      if(db.W2 - db.W > 0)
       {
         delta = this.pl('INJECTING', MyTelem.YELLOW);
-        lines.push(`Feeding: ${(db.W2.toFixed(1) - db.W.toFixed(1)).toFixed(1)} W ` + '⚡'+ delta);
+        lines.push(`My Room: ${(db.W2 - db.W).toFixed(1)} W ` + '⚡'+ delta);
       }
       else
       {
-        delta = this.pl('DELTA', MyTelem.BLUE);
-        lines.push(`My Room: ${(db.W.toFixed(1) - db.W2.toFixed(1)).toFixed(1)} W ` + delta);
+        delta = this.pl('CONSUMING', MyTelem.BLUE);
+        lines.push(`My Room: ${(db.W - db.W2).toFixed(1)} W ` + delta);
       }
       
       
