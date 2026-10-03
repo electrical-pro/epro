@@ -1032,13 +1032,19 @@ const MyTelem = {
 
       if(db.W2 - db.W > 0)
       {
-        delta = this.pl('INJECTING', MyTelem.YELLOW);
-        lines.push(`My Room: ${(db.W2 - db.W).toFixed(1)} W ` + '⚡'+ delta);
+        
+        if(db.A - db.A2 < 0)
+        cur_pill = this.pl(`GOOD ✔️ ${db.A.toFixed(2)} / ${db.A2.toFixed(2)} A`, MyTelem.BLUE);
+        else
+        cur_pill = this.pl(`HIGH 🟡 ${db.A.toFixed(2)} / ${db.A2.toFixed(2)} A`, MyTelem.YELLOW);
+
+        pill = this.pl('INJ', MyTelem.YELLOW);
+        lines.push(`Lab: ${(db.W2 - db.W).toFixed(1)} W ` + '⚡' + pill + " " + cur_pill);
       }
       else
       {
-        delta = this.pl('CONSUMING', MyTelem.BLUE);
-        lines.push(`My Room: ${(db.W - db.W2).toFixed(1)} W ` + delta);
+        pill = this.pl('CONSUMING', MyTelem.BLUE);
+        lines.push(`Lab: ${(db.W - db.W2).toFixed(1)} W ` + pill);
       }
       
       
