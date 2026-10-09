@@ -1401,6 +1401,36 @@ const MyTelem = {
     return [l];
   },
 
+  sunLines(s) {
+    const stamp = s?.ESP?.Time?.Stamp;
+    const sr = s?.ESP?.Sun?.SR;
+    const ss = s?.ESP?.Sun?.SS;
+    if (stamp === undefined || !sr || !ss) return [];   // missing or 0 (no sunrise/sunset)
+
+    let label, diff;
+    if (stamp < sr) {                // before sunrise
+      label = 'Sunrise:';
+      diff = sr - stamp;
+    } else if (stamp < ss) {         // daytime
+      label = 'Sunset:';
+      diff = ss - stamp;
+    } else {                         // after sunset: next sunrise is tomorrow
+      label = 'Sunrise:';
+      diff = sr + 86400 - stamp;     // approx, off by a minute or two
+    }
+
+    const totalSec = Math.max(0, Math.round(diff));
+    const hours = Math.floor(totalSec / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    const secs = totalSec % 60;
+
+    let l = `${label} in `;
+    if (hours > 0) l += `${hours} Hrs, `;
+    if (hours > 0 || mins > 0) l += `${mins} Min, `;
+    l += `${secs} Sec.`;
+    return [l];
+  },
+
   loopLines(s) {
     const esp = s?.ESP;
     if (!esp) return [];
@@ -1615,6 +1645,7 @@ const MyTelem = {
       this.section(this.motionFireLines(state, now)),
       this.section(this.chickenLightLines(state)),
       this.section(this.uptimeLines(state)),
+      this.section(this.sunLines(state)),
       this.section(this.loopLines(state))
       // warningsLines moved out to the top warnings-banner (see app.updateWarningsBanner)
     ].filter(Boolean);
