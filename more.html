@@ -1404,16 +1404,18 @@ const MyTelem = {
   sunLines(s) {
     const stamp = s?.ESP?.Time?.Stamp;
     const sr = s?.ESP?.Sun?.SR;
+    const tr = s?.ESP?.Sun?.TR;
     const ss = s?.ESP?.Sun?.SS;
-    if (stamp === undefined || !sr || !ss) return [];   // missing or 0 (no sunrise/sunset)
+    if (stamp === undefined || !sr || !tr || !ss) return [];   // missing or 0
+
+    // chronological order within one day
+    const events = [['Sunrise:', sr], ['Noon:', tr], ['Sunset:', ss]];
+    const next = events.find(([, t]) => stamp < t);
 
     let label, diff;
-    if (stamp < sr) {                // before sunrise
-      label = 'Sunrise:';
-      diff = sr - stamp;
-    } else if (stamp < ss) {         // daytime
-      label = 'Sunset:';
-      diff = ss - stamp;
+    if (next) {
+      label = next[0];
+      diff = next[1] - stamp;
     } else {                         // after sunset: next sunrise is tomorrow
       label = 'Sunrise:';
       diff = sr + 86400 - stamp;     // approx, off by a minute or two
