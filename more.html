@@ -1618,6 +1618,33 @@ const MyTelem = {
       add('thingspeak', 'Sending to ThingSpeak…', 'info');
     }
 
+    // sunrise sunset lable
+    const stamp = s?.ESP?.Time?.Stamp;
+    const sr = s?.ESP?.Sun?.SR;
+    const ss = s?.ESP?.Sun?.SS;
+
+    if (stamp !== undefined && sr && ss) {
+      let label, diff;
+      if (stamp < sr) {                // before sunrise
+        label = '☀️ Sunrise';
+        diff = sr - stamp;
+      } else if (stamp < ss) {         // daytime
+        label = '🌙 Sunset';
+        diff = ss - stamp;
+      } else {                         // after sunset: next sunrise is tomorrow
+        label = '☀️ Sunrise';
+        diff = sr + 86400 - stamp;     // approx, off by a minute or two
+      }
+
+      if (diff >= 0 && diff <= 3600) {   // only within 60 min of the event
+        const totalSec = Math.round(diff);
+        const mins = Math.floor(totalSec / 60);
+        const secs = totalSec % 60;
+        add('sun', `${label} in ${mins} Min, ${secs} Sec`, 'ok');
+      }
+    }
+
+
     //this is for testing the animation (ADD)
     // const step = Math.floor(Date.now() / 500) % 10;
     // if (step >= 1 && step <= 8) add('test1', 'TEST ONE xxxxxxx long one here', 'info');
