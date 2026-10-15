@@ -1335,22 +1335,6 @@ const MyTelem = {
       }
       lines.push(l);
     }
-
-    const fp = envr.FirePulse;
-    if (fp) {
-      let l;
-      if (fp.smoke) {
-        l = 'Fire alarm: ' + this.pl('SMOKE DETECTED!', MyTelem.RED);
-      } else {
-        const secsSincePulse = (now - fp.pulseLast) / 1000;
-        if (secsSincePulse < 100) {
-          l = 'Fire alarm: ' + this.pl('OK', MyTelem.GREEN) + ` ${this.agoStr(now, fp.pulseLast)} ago`;
-        } else {
-          l = 'Fire al.: ' + this.pl('NO PULSE', MyTelem.RED) + ` ${Math.round(secsSincePulse)}s`;
-        }
-      }
-      lines.push(l);
-    }
     
 
     const fi = envr.FireI2C;
@@ -1548,19 +1532,6 @@ const MyTelem = {
       else if (war.level === "GREEN") {} // do nothing
       else add('lev_u', '⚠️ UNKNOWN LEVEL', 'info');
       
-    }
-
-    //smoke alarms here too
-    const fp = envr?.FirePulse;
-    if (fp) {
-        if (fp.smoke) {
-            add('fireSmoke', '🔥 Fire alarm: SMOKE DETECTED!', 'danger');
-        } else {
-            const secsSincePulse = (now - fp.pulseLast) / 1000;
-            if (secsSincePulse >= 100) {
-                add('firePulse', `🔥 Fire alarm: NO PULSE ${Math.round(secsSincePulse)}s`, 'danger');
-            }
-        }
     }
 
     const fi = envr?.FireI2C;
