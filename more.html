@@ -27,14 +27,14 @@
     --accent: #08e18e;
     --accent-glow: rgba(8, 225, 142, 0.2);
     
-    --danger: #ff6464;
-    --danger-glow: rgba(255, 128, 128, 0.2); /* Added for status-bad */
+    --danger: #ff5f5f;                        /* pill/UI red: a touch lighter than MyTelem.RED */
+    --danger-glow: rgba(255, 105, 105, 0.2); /* Added for status-bad */
     
     --info: #5cc8ff;
     --info-glow: rgba(92, 200, 255, 0.2); /* Added for ms, night, and status-ok */
     
-    --warn: #fff240;
-    --warn-glow: rgba(255, 246, 116, 0.15);
+    --warn: #ffe92e;                          /* pill/UI yellow: a touch lighter than MyTelem.YELLOW */
+    --warn-glow: rgba(255, 233, 46, 0.15);
     --day-color: #ffee80; /* Added for day text */
     --day-glow: rgba(255, 242, 159, 0.2); /* Added for day background */
     
@@ -394,6 +394,16 @@
   .warn-pill.warn { background: var(--warn-glow); color: var(--warn); }
   .warn-pill.danger { background: var(--danger-glow); color: var(--danger); }
 
+  /* Pill icon + text. The icon inherits the pill's colour (kind = meaning) unless add() is given an iconColor. */
+  .warn-pill { display: inline-flex; align-items: center; gap: 5px; }
+  .warn-pill svg {
+    flex: none; width: 13px; height: 13px; overflow: visible;
+    fill: none; stroke: currentColor; stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  .warn-pill svg .ic-fill  { fill: currentColor; fill-opacity: .25; }
+  .warn-pill svg .ic-solid { fill: currentColor; stroke: none; }
+
 
   .card-content { padding: var(--row-edge-pad) var(--card-pad-x) calc(var(--row-edge-pad) * 2) var(--card-pad-x); display: flex; flex-direction: column; gap: 6px; }
 
@@ -482,11 +492,99 @@
   }
 
   .control-icon {
-    width: 36px; height: 36px;
-    border-radius: var(--radius-sm);
-    background: var(--border);
+    --control-icon-size: 30px;               /* the one number to change to resize the control icons */
+    --control-icon-slot: calc(var(--control-icon-size) + 6px);
+    width: var(--control-icon-slot); height: var(--control-icon-slot);   /* fixed slot: keeps labels aligned and row heights stable */
     display: flex; align-items: center; justify-content: center;
     font-size: 22px; flex-shrink: 0;
+  }
+
+
+  /* --- SVG icons (opt-in per item via `svg:` in CONFIG; emoji stay as the fallback) ---
+     Unlit = dim line art. Lit = tinted with the icon's own colour, soft glow, and the
+     .ic-fill / .ic-ray parts brighten. --lvl (0..1) is set from the control's state:
+     slider position for dimmers, 1/0 for toggles and choices. */
+  [data-ic] { --ic: #ffd166; --ic-glow: rgba(255, 209, 102, .45); }
+  [data-ic="desk"]    { --ic: #ffb347; --ic-glow: rgba(255, 179, 71, .45); }
+  [data-ic="kitchen"] { --ic: #ff9f5a; --ic-glow: rgba(255, 159, 90, .45); }
+  [data-ic="outside"] { --ic: #7cc7ff; --ic-glow: rgba(124, 199, 255, .45); }
+  [data-ic="chicken"], [data-ic="rooster"] { --ic: #ffb86b; --ic-glow: rgba(255, 184, 107, .45); }
+  [data-ic="rgb"]     { --ic: #ffffff; --ic-glow: rgba(255, 255, 255, .25); }
+
+  .control-icon svg, .card-header span.icon svg {
+    display: block; overflow: visible;
+    fill: none; stroke: currentColor; stroke-width: 1.3;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  .control-icon svg { width: var(--control-icon-size); height: var(--control-icon-size); }
+  /* No tile: "off" is just dim line art, "on" is the icon's colour plus a glow.
+     --lvl (0..1) scales the glow, so a dimmer's icon brightens as the slider goes up. */
+  .control-icon.has-svg { color: var(--text-dim); --lvl: 0; transition: color var(--dur-fast) ease; }
+  .control-icon.has-svg.is-lit { color: var(--ic); }
+  .control-icon.has-svg svg { transition: filter var(--dur-snug) ease; }
+  .control-icon.has-svg.is-lit svg {
+    filter: drop-shadow(0 0 calc((1px + 3px * var(--lvl)) * var(--glow-k)) var(--ic-glow))
+            drop-shadow(0 0 calc((3px + 9px * var(--lvl)) * var(--glow-k)) var(--ic-glow));
+  }
+  .control-icon svg .ic-fill { fill: currentColor; fill-opacity: 0; transition: fill-opacity var(--dur-snug) ease; }
+  .control-icon svg .ic-solid { fill: currentColor; stroke: none; }   /* small solid details: eyes, dots */
+  /* Fill strength is per icon so big shapes don't turn into bright blobs next to the glow:
+     --fill-min/--fill-max = fill at lvl 0 -> 1, --glow-k = glow size multiplier. */
+  .control-icon { --fill-min: .05; --fill-max: .20; --glow-k: 1; }
+  .control-icon.is-lit svg .ic-fill { fill-opacity: calc(var(--fill-min) + (var(--fill-max) - var(--fill-min)) * var(--lvl)); }
+  .control-icon[data-ic="tv"], .control-icon[data-ic="kitchen"], .control-icon[data-ic="globe"],
+  .control-icon[data-ic="leaf"], .control-icon[data-ic="chicken"], .control-icon[data-ic="rooster"], .control-icon[data-ic="speaker"],
+  .control-icon[data-ic="plug"], .control-icon[data-ic="outside"] { --fill-min: .02; --fill-max: .08; --glow-k: .75; }
+  .control-icon svg .ic-ray { opacity: .5; transition: opacity var(--dur-snug) ease; }
+  .control-icon.is-lit svg .ic-ray { opacity: calc(.45 + .55 * var(--lvl)); }
+  /* RGB Mode: the three arcs only take their colours once a mode is running */
+  .control-icon.is-lit svg .ic-c1 { stroke: var(--danger); }
+  .control-icon.is-lit svg .ic-c2 { stroke: var(--warn); }
+  .control-icon.is-lit svg .ic-c3 { stroke: var(--accent); }
+  /* Card header icon: always "on" */
+  .card-header span.icon[data-ic] { display: flex; color: var(--ic); }
+  .card-header span.icon svg { width: 22px; height: 22px; filter: drop-shadow(0 0 4px var(--ic-glow)); }
+  .card-header span.icon svg .ic-fill { fill: currentColor; fill-opacity: .14; }
+  .card-header span.icon[data-ic="gear"] svg .ic-fill, .card-header span.icon[data-ic="toolbox"] svg .ic-fill,
+  .card-header span.icon[data-ic="db"] svg .ic-fill, .card-header span.icon[data-ic="wrench"] svg .ic-fill { fill-opacity: .08; }
+
+  /* second batch of icon colours */
+  [data-ic="sat"]     { --ic: #5cc8ff; --ic-glow: rgba(92, 200, 255, .45); }
+  [data-ic="bolt"]    { --ic: #ffe14d; --ic-glow: rgba(255, 225, 77, .45); }
+  [data-ic="gear"]    { --ic: #a9bcc7; --ic-glow: rgba(169, 188, 199, .35); }
+  [data-ic="toolbox"] { --ic: #ff9f5a; --ic-glow: rgba(255, 159, 90, .45); }
+  [data-ic="chart"]   { --ic: #08e18e; --ic-glow: rgba(8, 225, 142, .4); }
+  [data-ic="wrench"]  { --ic: #c792ff; --ic-glow: rgba(199, 146, 255, .45); }
+  [data-ic="db"]      { --ic: #6ee7d8; --ic-glow: rgba(110, 231, 216, .4); }
+  [data-ic="tv"]      { --ic: #7cc7ff; --ic-glow: rgba(124, 199, 255, .45); }
+  [data-ic="plug"], [data-ic="battery"], [data-ic="leaf"] { --ic: #08e18e; --ic-glow: rgba(8, 225, 142, .4); }
+  [data-ic="fan"], [data-ic="globe"] { --ic: #5cc8ff; --ic-glow: rgba(92, 200, 255, .45); }
+  [data-ic="speaker"] { --ic: #ffb347; --ic-glow: rgba(255, 179, 71, .45); }
+  [data-ic="heart"]   { --ic: #ff6b81; --ic-glow: rgba(255, 107, 129, .45); }
+  [data-ic="uplink"]  { --ic: #c792ff; --ic-glow: rgba(199, 146, 255, .45); }
+  [data-ic="wind"]    { --ic: #7ee0e0; --ic-glow: rgba(126, 224, 224, .4); }
+  [data-ic="delta"]   { --ic: #ff9f5a; --ic-glow: rgba(255, 159, 90, .45); }
+
+  /* Battery: the inner bar IS the slider value (0..1 via --lvl) */
+  .control-icon svg .ic-level {
+    fill: currentColor; stroke: none; fill-opacity: .75;
+    transform-box: fill-box; transform-origin: left center;
+    transform: scaleX(var(--lvl, 0)); transition: transform var(--dur-snug) ease;
+  }
+  /* Fan spins while on, faster the higher the slider */
+  .control-icon svg .ic-spin { transform-origin: 12px 12px; }
+  .control-icon.is-lit svg .ic-spin { animation: ic-spin calc(2.6s - 2.2s * var(--lvl)) linear infinite; }
+  @keyframes ic-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .control-icon.is-lit svg .ic-spin { animation: none; }
+  }
+
+  /* Card header icon box: ONE fixed size whether it holds an emoji or an SVG, so the
+     title row has the same height either way (the emoji used to set it via line-height). */
+  .card-header span.icon {
+    display: flex; align-items: center; justify-content: center;
+    flex: none; width: 26px; height: 26px;
+    font-size: 20px; line-height: 1;
   }
 
   .control-label {
@@ -673,6 +771,41 @@
   .link-item:hover { border-color: var(--text-dim); background: var(--panel-hover); transform: translateY(-1px); }
   .link-item .icon { font-size: 18px; }
   .link-item .desc { font-size: 13px; font-weight: 500; }
+
+  /* third batch: link-card icon colours */
+  [data-ic="folder"] { --ic: rgb(255, 200, 87); --ic-glow: rgba(255, 200, 87, .45); }
+  [data-ic="bell"] { --ic: rgb(255, 179, 71); --ic-glow: rgba(255, 179, 71, .45); }
+  [data-ic="braces"] { --ic: rgb(199, 146, 255); --ic-glow: rgba(199, 146, 255, .45); }
+  [data-ic="cloud"] { --ic: rgb(159, 180, 192); --ic-glow: rgba(159, 180, 192, .45); }
+  [data-ic="thermo"] { --ic: rgb(255, 122, 89); --ic-glow: rgba(255, 122, 89, .45); }
+  [data-ic="drop"] { --ic: rgb(92, 200, 255); --ic-glow: rgba(92, 200, 255, .45); }
+  [data-ic="gauge"] { --ic: rgb(110, 231, 216); --ic-glow: rgba(110, 231, 216, .45); }
+  [data-ic="acwave"] { --ic: rgb(255, 225, 77); --ic-glow: rgba(255, 225, 77, .45); }
+  [data-ic="ram"] { --ic: rgb(255, 143, 177); --ic-glow: rgba(255, 143, 177, .45); }
+  [data-ic="chip"] { --ic: rgb(126, 224, 224); --ic-glow: rgba(126, 224, 224, .45); }
+  [data-ic="onewire"] { --ic: rgb(124, 199, 255); --ic-glow: rgba(124, 199, 255, .45); }
+  [data-ic="warn"] { --ic: rgb(255, 179, 71); --ic-glow: rgba(255, 179, 71, .45); }
+  [data-ic="wifi"] { --ic: rgb(92, 200, 255); --ic-glow: rgba(92, 200, 255, .45); }
+  [data-ic="monitor"] { --ic: rgb(169, 188, 199); --ic-glow: rgba(169, 188, 199, .45); }
+  [data-ic="info"] { --ic: rgb(92, 200, 255); --ic-glow: rgba(92, 200, 255, .45); }
+  [data-ic="restart"] { --ic: rgb(255, 100, 100); --ic-glow: rgba(255, 100, 100, .45); }
+
+  /* Link-card icons: always tinted (no on/off state), glow on hover. The slot is a fixed box
+     so the pill height doesn't depend on whether it holds an emoji or an SVG. */
+  .link-item .icon {
+    display: flex; align-items: center; justify-content: center;
+    flex: none; width: 22px; height: 22px; line-height: 1;
+  }
+  .link-item .icon[data-ic] { color: var(--ic); }
+  .link-item .icon svg {
+    display: block; width: 20px; height: 20px; overflow: visible;
+    fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
+    transition: filter var(--dur-fast) ease;
+  }
+  .link-item .icon svg .ic-fill { fill: currentColor; fill-opacity: .22; }
+  .link-item .icon svg .ic-level { fill: currentColor; stroke: none; fill-opacity: .75; }
+  .link-item:hover .icon svg { filter: drop-shadow(0 0 4px var(--ic-glow)); }
+
   
   .table-row {
     display: flex; flex-direction: column; gap: 4px;
@@ -856,8 +989,8 @@
     }
 
     body.mini-active .control-icon {
-      width: 24px; height: 24px;
-      background: transparent; /* or simply remove this line */
+      --control-icon-size: 30px;   /* mini-mode icon size: same as normal mode; lower it (e.g. 24px) to shrink - the slot follows automatically */
+      background: transparent;
     }
 
     .link-item {
@@ -917,16 +1050,20 @@ const textEncoder = new TextEncoder();
 // ==========================================================================
 const MyTelem = {
 
-  // colro definitions
-  RED:          '#FE3437',
-  DEEP_RED:     '#b00020',
+  // color definitions
+  // Severity ladder, evenly spaced in perceived colour (about the same step between neighbours):
+  //   GREEN > LIME > YELLOW > WARM_ORANGE > ORANGE > RED > DEEP_RED     (BLUE = neutral / info)
+  // GREEN and BLUE equal the CSS tokens --accent and --info; --warn and --danger are deliberately a little lighter than YELLOW and RED.
+  // Use 6-digit hex only: pl() appends an alpha byte ("26") to build the pill background.
   GREEN:        '#08E18E',
-  YELLOW:       '#FFDE00',
-  LIGHT_YELLOW: '#FCC668',
   LIME:         '#A8E108',
-  ORANGE:       '#FF6300',
-  WARM_ORANGE:  '#FE8C37',
-  BLUE:         '#09D5F4',
+  YELLOW:       '#FFDE00',
+  LIGHT_YELLOW: '#FFD15A',   // text tint only (e.g. out-of-range cell voltage)
+  WARM_ORANGE:  '#FFAE34',
+  ORANGE:       '#FF7E21',
+  RED:          '#FE4B48',
+  DEEP_RED:     '#F9096C',   // crimson, not dark red: stays readable (>= 4.5:1) on the dark pill
+  BLUE:         '#5CC8FF',
 
   
   c(text, color) { return `<span style="color:${color}">${text}</span>`; },
@@ -1464,7 +1601,9 @@ const MyTelem = {
     const mc2p5 = s?.envr?.SPS30?.mc2p5?.toFixed(1);
     const co2 = s?.envr?.SCD30?.co2;
     const temp = s?.envr?.temp;
-    const add = (id, text, kind) => out.push({ id, kind, text });
+    // add(id, text, kind, icon, iconColor): iconColor is optional (any CSS colour, e.g. '#ffd166' or 'var(--warn)').
+    // Leave it out and the icon simply takes the pill's colour, as before.
+    const add = (id, text, kind, icon, iconColor) => out.push({ id, kind, text, icon, iconColor });
 
 
 
@@ -1488,49 +1627,49 @@ const MyTelem = {
     {
       if (Number.isFinite(db_box?.V) && Number.isFinite(db_box?.highV) && Number.isFinite(db_box?.lowV))
       {
-          if (db_box.V >= db_box?.highV) add('highV', `⚡ VERY HIGH VOLTAGE: ${db_box.V} V`, 'danger');
-          if (db_box.V <= db_box?.lowV) add('lowV', `⚡ VERY LOW VOLTAGE: ${db_box.V} V`, 'danger');
+          if (db_box.V >= db_box?.highV) add('highV', `VERY HIGH VOLTAGE: ${db_box.V} V`, 'danger', 'bolt');
+          if (db_box.V <= db_box?.lowV) add('lowV', `VERY LOW VOLTAGE: ${db_box.V} V`, 'danger', 'bolt');
       }
-      else add('voltageError', '⚡ Voltage thresholds unavailable', 'warn');
+      else add('voltageError', 'Voltage thresholds unavailable', 'warn', 'bolt');
     }
 
     if (s?.heartbeat === true && esp?.hSysHB && now > esp.hSysHB + 120000) {
       add('noHbHackSys', `NO HB FROM HACK SYS · ${Math.round((now - esp.hSysHB) / 1000)}s`, 'danger');
     }
 
-    if (bms && bms.ask_chrg_prc !== 100) add('bms', `⚡ BMS · CRG SUGGEST: ${bms.ask_chrg_prc}%`, 'info');
+    if (bms && bms.ask_chrg_prc !== 100) add('bms', `BMS · CRG SUGGEST: ${bms.ask_chrg_prc}%`, 'info', 'bolt', '#FFE14D');
     if (esp?.last_ddp !== undefined && (now - esp.last_ddp) < 500) add('ddp', 'DDP · GETTING RGB DATA', 'info');
-    if (esp?.sendDataToServer === false) add('notSending', '❌ NOT SENDING DATA TO SERVERS', 'danger');
-    if (esp?.Conn?.connToAP === false) add('offlineControl', '📴 OFFLINE CONTROL MODE', 'warn');
-    if (esp?.Conn?.internetDown === true) add('internetDown', '❌ INTERNET IS DOWN', 'danger');
-    if (esp?.publicAccess === true) add('publicAccess', '🔓 PUBLIC ACCESS ENABLED', 'danger');
+    if (esp?.sendDataToServer === false) add('notSending', 'NOT SENDING DATA TO SERVERS', 'danger', 'xcircle', '#FFFFFF');
+    if (esp?.Conn?.connToAP === false) add('offlineControl', 'OFFLINE CONTROL MODE', 'warn', 'wifioff', '#FFFFFF');
+    if (esp?.Conn?.internetDown === true) add('internetDown', 'INTERNET IS DOWN', 'danger', 'xcircle', '#FFFFFF');
+    if (esp?.publicAccess === true) add('publicAccess', 'PUBLIC ACCESS ENABLED', 'danger', 'unlock', '#FFFFFF');
     if (esp?.powerSave === true) add('powerSave', 'POWER SAVE MODE ENABLED', 'ok');
-    if (s?.backUpLightMain === true) add('lightsMain', '💡 BIG ROOM LIGHTS ON', 'warn');
-    if (s?.backUpLightKitchen === true) add('lightsKitchen', '💡 KITCHEN LIGHTS ON', 'warn');
-    if (s?.outsideLight === true) add('lightsOutside', '💡 OUTSIDE LIGHTS ON', 'warn');
-    if (s?.heartbeat !== true) add('heartbeatOff', '❌ HB DETECT IS OFF', 'danger');
-    if (esp?.sound !== true) add('buzzerOff', '🔔 BUZZER IS OFF', 'danger');
-    if (esp?.bzzPlay === true) add('bzzPlay', '🔔 Bzz', 'warn');
+    if (s?.backUpLightMain === true) add('lightsMain', 'BIG ROOM LIGHTS ON', 'warn', 'bulb', '#FFFFFF');
+    if (s?.backUpLightKitchen === true) add('lightsKitchen', 'KITCHEN LIGHTS ON', 'warn', 'bulb', '#FFFFFF');
+    if (s?.outsideLight === true) add('lightsOutside', 'OUTSIDE LIGHTS ON', 'warn', 'bulb', '#FFFFFF');
+    if (s?.heartbeat !== true) add('heartbeatOff', 'HB DETECT IS OFF', 'danger', 'xcircle', '#FFFFFF');
+    if (esp?.sound !== true) add('buzzerOff', 'BUZZER IS OFF', 'danger', 'belloff', '#FFFFFF');
+    if (esp?.bzzPlay === true) add('bzzPlay', 'Bzz', 'warn', 'bell');
 
-    if (s?.tvOn === true) add('tvOn', '📺 TV is ON', 'info');
-    if (s?.fanSpeed > 0) add('fan', `🌀 Fan: ${s?.fanSpeed} %`, 'info');
+    if (s?.tvOn === true) add('tvOn', 'TV is ON', 'info', 'tv', '#FFFFFF');
+    if (s?.fanSpeed > 0) add('fan', `Fan: ${s?.fanSpeed} %`, 'info', 'fan', '#FFFFFF');
 
     if (war) {
       if (war.AirRaid)    add('airRaid', `AIR ALERT IN ${war.alertsTotal} REG`, 'danger');
       if (war.locations && war.locations.length > 4) add('warLocations', war.locations, 'danger');
       
-      if (war.hasAct)     add('HasActivityFly', '✈️ ACTIV', 'danger');
-      if (war.neptuneActive) add('NeptunLocal', '🚀 NEPTUN', 'danger');
-      if (war.teleActive) add('teleActive', '🚀 TELE LOCAL', 'danger');
-      if (war.rapid)      add('HasActivityRapid', '🚀 RAPID', 'danger');
+      if (war.hasAct)     add('HasActivityFly', 'ACTIV', 'danger', 'plane', '#FFFFFF');
+      if (war.neptuneActive) add('NeptunLocal', 'NEPTUN', 'danger', 'rocket', '#FFFFFF');
+      if (war.teleActive) add('teleActive', 'TELE LOCAL', 'danger', 'rocket', '#FFFFFF');
+      if (war.rapid)      add('HasActivityRapid', 'RAPID', 'danger', 'rocket', '#FFFFFF');
 
-      if (war.chem === true) add('chem', '☣️ CHEMICAL ATTACK', 'danger');
-      if (war.nuke === true) add('nuke', '☢️ NUCLEAR ATTACK', 'danger');
+      if (war.chem === true) add('chem', 'CHEMICAL ATTACK', 'danger', 'biohazard', '#FFFFFF');
+      if (war.nuke === true) add('nuke', 'NUCLEAR ATTACK', 'danger', 'radiation', '#FFFFFF');
 
       if (war.level === "YELLOW") add('lev_y', '🟡 YELLOW LEVEL', 'warn');
       else if (war.level === "RED") add('lev_r', '🔴 RED LEVEL', 'danger');
       else if (war.level === "GREEN") {} // do nothing
-      else add('lev_u', '⚠️ UNKNOWN LEVEL', 'info');
+      else add('lev_u', 'UNKNOWN LEVEL', 'info', 'warn');
       
     }
 
@@ -1552,19 +1691,19 @@ const MyTelem = {
     // fading one out and a different one in for what's really one signal.
     const diff = s?.envr?.presHrDif;
     if (diff !== undefined) {
-      if (diff < -1.8) add('pressure', `🌧️ STORM ALARM · 1H CHANGE: ${diff}`, 'danger');
-      else if (diff < -1.1) add('pressure', `🌧️ STORM WARNING · 1H CHANGE: ${diff}`, 'warn');
-      else if (diff > 1.1) add('pressure', `🌦️ PRESSURE RISES QUICKLY · 1H CHANGE: ${diff}`, 'info');
+      if (diff < -1.8) add('pressure', `STORM ALARM · 1H CHANGE: ${diff}`, 'danger', 'rain', '#FFFFFF');
+      else if (diff < -1.1) add('pressure', `STORM WARNING · 1H CHANGE: ${diff}`, 'warn', 'rain', '#FFFFFF');
+      else if (diff > 1.1) add('pressure', `PRESSURE RISES QUICKLY · 1H CHANGE: ${diff}`, 'info', 'gauge', '#FFFFFF');
     }
 
 
     // PM2.5 (µg/m³)
-    if (mc2p5 > 125.4) add('mc2p5', `🏭 PM2.5: ${mc2p5} µg/m³`, 'danger');
-    else if (mc2p5 > 55.4) add('mc2p5', `🏭 PM2.5: ${mc2p5} µg/m³`, 'warn');
+    if (mc2p5 > 125.4) add('mc2p5', `PM2.5: ${mc2p5} µg/m³`, 'danger', 'factory', '#FFFFFF');
+    else if (mc2p5 > 55.4) add('mc2p5', `PM2.5: ${mc2p5} µg/m³`, 'warn', 'factory', '#FFFFFF');
 
     // CO₂ (ppm)
-    if (co2 > 2500) add('co2', `🌬️ CO2: ${co2} ppm`, 'danger');
-    else if (co2 > 2000) add('co2', `🌬️ CO2: ${co2} ppm`, 'warn');
+    if (co2 > 2500) add('co2', `CO2: ${co2} ppm`, 'danger', 'wind', '#FFFFFF');
+    else if (co2 > 2000) add('co2', `CO2: ${co2} ppm`, 'warn', 'wind', '#FFFFFF');
 
 
     // ======== short lived  ====================//
@@ -1654,6 +1793,61 @@ const MyTelem = {
   }
 };
 
+const SVG_ICONS = {
+  bulb: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/><path d="M9.5 19h5M10.5 21.5h3"/></svg>',
+  main: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5V7"/><path class="ic-fill" d="M4.5 15a7.5 7.5 0 0 1 15 0z"/><path class="ic-ray" d="M8 18.5l-1.2 2.2M12 18.5v3M16 18.5l1.2 2.2"/></svg>',
+  desk: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21h8"/><path d="M8 21l.2-6.5 3-3.5"/><circle cx="8.2" cy="14.5" r=".7"/><g transform="rotate(-30 15.5 8.5)"><path class="ic-fill" d="M10.5 8.5a5 5 0 0 1 10 0z"/><path class="ic-ray" d="M12.2 11.7v1.8M15.5 11.7v2.6M18.8 11.7v1.8"/></g></svg>',
+  rgb: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16M12 4v16M19 4v16"/> <circle class="ic-c1" cx="5" cy="8" r="2.1"/> <circle class="ic-c2" cx="12" cy="14" r="2.1"/> <circle class="ic-c3" cx="19" cy="10" r="2.1"/></svg>',
+  room: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5L12 4l9 7.5"/><path d="M5.5 10v10.5h13V10"/><rect class="ic-fill" x="9" y="12.5" width="6" height="5.5" rx="1"/><path d="M12 12.5V18M9 15.25h6"/></svg>',
+  kitchen: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M5.5 11.3h13v5.5a3.3 3.3 0 0 1-3.3 3.3H8.8a3.3 3.3 0 0 1-3.3-3.3z"/> <path d="M4.5 11.2h15"/> <path d="M3 13.2h2.5M18.5 13.2H21"/> <path class="ic-ray" d="M9 8.3c-1.1-1 .8-1.8 0-3M12 8.3c-1.1-1 .8-1.8 0-3M15 8.3c-1.1-1 .8-1.8 0-3"/></svg>',
+  outside: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M20.5 13.8A8.5 8.5 0 1 1 10.2 3.5a6.8 6.8 0 0 0 10.3 10.3z"/><path class="ic-ray" d="M17 3v3.5M15.25 4.75h3.5"/></svg>',
+  chicken: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" style="stroke:none" d="M15.8 4.9C14.9 7.4 13.4 9 11.6 9.2 9.8 9.4 8.6 8.9 7.9 8.7 6.7 8.3 6.2 6.9 5.2 6 4 5 2.6 5.5 2.3 7c-.3 1.4.3 2.3.6 2.7-.6.9-.4 1.6.7 2.1l2.2.6C6 14 6.8 15.6 8.2 16.8 9.8 18 12 18.2 14.2 18.1 17.3 17.9 19.7 16 20.1 11.8c.1-1.3-.5-2.1-.8-2.8-.1-.8.5-1.3.9-1.4L20.2 5.4L15.8 4.9z"/><path class="ic-fill" style="stroke:none" d="M15.8 4.9C15 4.2 15.1 3 16.2 2.6c.5-.2 1.1-.2 1.6 0 .5-.5 1.5-.5 1.9.2.9.1 1.5.9 1.1 1.8-.2.4-.5.6-.7.7z"/><path d="M15.8 4.9C15 4.2 15.1 3 16.2 2.6c.5-.2 1.1-.2 1.6 0 .5-.5 1.5-.5 1.9.2.9.1 1.5.9 1.1 1.8-.2.4-.5.6-.7.7"/><path d="M15.8 4.9C14.9 7.4 13.4 9 11.6 9.2 9.8 9.4 8.6 8.9 7.9 8.7 6.7 8.3 6.2 6.9 5.2 6 4 5 2.6 5.5 2.3 7c-.3 1.4.3 2.3.6 2.7-.6.9-.4 1.6.7 2.1l2.2.6C6 14 6.8 15.6 8.2 16.8 9.8 18 12 18.2 14.2 18.1 17.3 17.9 19.7 16 20.1 11.8c.1-1.3-.5-2.1-.8-2.8-.1-.8.5-1.3.9-1.4"/><path d="M20.3 5.2L20.4 5.9 21.9 7.1 20.2 7.7"/><path d="M3.1 9.5C4 10 5 10.4 5.8 10.7"/><path d="M15.7 11c.2 2-.7 3.8-2.3 4.500-1.300.6-2.800.5-3.8-.2"/><path d="M12 18.1V20.2M12 20.2L10.6 21.4M12 20.2L13.2 21.4M15.2 18V20.1M15.2 20.1L13.9 21.3M15.2 20.1L16.5 21.3"/><circle cx="18.4" cy="6.05" r=".65"/><circle class="ic-solid" cx="18.4" cy="6.05" r=".22"/></svg>',
+  sat: '<svg viewBox="0 0 24 24" aria-hidden="true"><g transform="rotate(-45 12 12)"><rect x="2.5" y="10" width="5" height="4" rx=".6"/><rect class="ic-fill" x="9.5" y="8.5" width="5" height="7" rx="1.2"/><rect x="16.5" y="10" width="5" height="4" rx=".6"/><path d="M7.5 12h2M14.5 12h2"/></g><path class="ic-ray" d="M13 21a8 8 0 0 0 8-8M13 17.5a4.5 4.5 0 0 0 4.5-4.5"/></svg>',
+  bolt: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M13.5 2.5L5 13.5h6.2l-.9 8L19 10.5h-6.2z"/></svg>',
+  gear: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M9.81 4.93 L10.38 2.54 L13.62 2.54 L14.19 4.93 L15.45 5.45 L17.54 4.16 L19.84 6.46 L18.55 8.55 L19.07 9.81 L21.46 10.38 L21.46 13.62 L19.07 14.19 L18.55 15.45 L19.84 17.54 L17.54 19.84 L15.45 18.55 L14.19 19.07 L13.62 21.46 L10.38 21.46 L9.81 19.07 L8.55 18.55 L6.46 19.84 L4.16 17.54 L5.45 15.45 L4.93 14.19 L2.54 13.62 L2.54 10.38 L4.93 9.81 L5.45 8.55 L4.16 6.46 L6.46 4.16 L8.55 5.45z"/><circle cx="12" cy="12" r="3"/></svg>',
+  toolbox: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M3.5 9.5h17v10a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5z"/><path d="M9 9.5V6.5A1.5 1.5 0 0 1 10.5 5h3A1.5 1.5 0 0 1 15 6.5v3"/><path d="M3.5 14.5h17"/><path d="M10.5 13v3h3v-3z"/></svg>',
+  chart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 3.5v17h17"/><rect class="ic-fill" x="7" y="12" width="3" height="5.5" rx=".6"/><rect class="ic-fill" x="11.5" y="8" width="3" height="9.5" rx=".6"/><rect class="ic-fill" x="16" y="10.5" width="3" height="7" rx=".6"/></svg>',
+  wrench: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.7-3.7a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9z"/></svg>',
+  db: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 6v12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V6"/><path d="M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/><ellipse class="ic-fill" cx="12" cy="6" rx="7.5" ry="3"/></svg>',
+  tv: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect class="ic-fill" x="3" y="5" width="18" height="12" rx="2"/><path d="M8 20.5h8M12 17v3.5"/><path class="ic-ray" d="M6.5 8.5h3"/></svg>',
+  plug: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v4M15 3v4"/><path class="ic-fill" d="M6.5 7h11v3.5a5.5 5.5 0 0 1-11 0z"/><path d="M12 16v5"/></svg>',
+  battery: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="17" height="10" rx="2.5"/><path d="M22 10.5v3"/><rect class="ic-level" x="5" y="9.5" width="12" height="5" rx="1"/></svg>',
+  fan: '<svg viewBox="0 0 24 24" aria-hidden="true"><g class="ic-spin"><path class="ic-fill" d="M12 10.3C10.7 7.5 10.9 4.3 12.6 3c2.2.9 2.7 4.1.7 7.3z"/><path class="ic-fill" d="M12 10.3C10.7 7.5 10.9 4.3 12.6 3c2.2.9 2.7 4.1.7 7.3z" transform="rotate(120 12 12)"/><path class="ic-fill" d="M12 10.3C10.7 7.5 10.9 4.3 12.6 3c2.2.9 2.7 4.1.7 7.3z" transform="rotate(240 12 12)"/></g><circle cx="12" cy="12" r="1.5"/></svg>',
+  speaker: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M3.5 9.5H7L12 5v14l-5-4.5H3.5z"/><path class="ic-ray" d="M15.5 9a4.2 4.2 0 0 1 0 6M18.3 6.2a8 8 0 0 1 0 11.6"/></svg>',
+  heart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5S3.5 15.7 3.5 9.7A4.3 4.3 0 0 1 12 8a4.3 4.3 0 0 1 8.5 1.7c0 6-8.5 10.8-8.5 10.8z"/><path class="ic-ray" d="M7.5 12.5h2l1.2-2.2 1.8 4.2 1.2-2h2.8"/></svg>',
+  globe: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle class="ic-fill" cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/></svg>',
+  uplink: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle class="ic-fill" cx="12" cy="12" r="1.8"/><path class="ic-ray" d="M8 8a5.7 5.7 0 0 0 0 8M16 8a5.7 5.7 0 0 1 0 8M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14"/></svg>',
+  wind: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h10.5a2.5 2.5 0 1 0-2.5-2.5"/><path d="M3 13h15a2.8 2.8 0 1 1-2.8 2.8"/><path class="ic-ray" d="M3 17h6"/></svg>',
+  delta: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4L21 19.5H3z"/><path class="ic-ray" d="M9.5 15.5h5"/></svg>',
+  leaf: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M19.5 4.5C11 4.5 5.5 9 5.5 15.5c0 1.5.4 2.8 1 4 7.5 0 13-5 13-15z"/><path class="ic-ray" d="M4.5 20.5C7.5 15.5 11 12 15 9.5"/></svg>',
+  folder: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4.2l2 2.5h8.8A1.5 1.5 0 0 1 21 10v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18z"/></svg>',
+  bell: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0M12 3.5V5"/><path class="ic-ray" d="M3 9.5a9 9 0 0 1 1.8-3.8M21 9.5a9 9 0 0 0-1.8-3.8"/></svg>',
+  braces: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4.5C7 4.5 6.5 5.5 6.5 7v2.5c0 1.5-1 2.5-2.5 2.5 1.5 0 2.5 1 2.5 2.5V17c0 1.5.5 2.5 2.5 2.5"/><path d="M15 4.5c2 0 2.5 1 2.5 2.5v2.5c0 1.5 1 2.5 2.5 2.5-1.5 0-2.5 1-2.5 2.5V17c0 1.5-.5 2.5-2.5 2.5"/><path class="ic-ray" d="M12 8.5h.01M12 12h.01M12 15.5h.01"/></svg>',
+  cloud: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M7 17a4 4 0 0 1-.6-7.95A5.5 5.5 0 0 1 17 8.5a4.25 4.25 0 0 1 .5 8.5z"/><path class="ic-ray" d="M5.5 20.5h5M13 20.5h5.5"/></svg>',
+  thermo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M10 14.5V5a2 2 0 0 1 4 0v9.5a4 4 0 1 1-4 0z"/><path class="ic-ray" d="M12 9.5v7M17 6h2.5M17 9h2.5"/></svg>',
+  drop: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M12 3.5C8.5 8 6 11 6 14.5a6 6 0 0 0 12 0C18 11 15.5 8 12 3.5z"/><path class="ic-ray" d="M9.5 15a2.5 2.5 0 0 0 2 2.5"/></svg>',
+  gauge: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M6 18.5a8.5 8.5 0 1 1 12 0z"/><path d="M12 12.5l3.5-3.5"/><circle cx="12" cy="12.5" r="1.2"/><path class="ic-ray" d="M12 5.5V7M6.5 8.5l1 1M17.5 8.5l-1 1"/></svg>',
+  acwave: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12c1.5-6.5 3-6.5 4.5 0s3 6.5 4.5 0 3-6.5 4.5 0 3 6.5 4.5 0"/><path class="ic-ray" d="M3 12h18"/></svg>',
+  ram: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect class="ic-fill" x="3" y="6.5" width="18" height="9.5" rx="1.5"/><path d="M6.5 16v3M10.5 16v3M14.5 16v3M18 16v3"/><path class="ic-ray" d="M7 9.5v3M11 9.5v3M15 9.5v3"/></svg>',
+  chip: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect class="ic-fill" x="7" y="7" width="10" height="10" rx="1.5"/><path d="M10 7V4M14 7V4M10 20v-3M14 20v-3M7 10H4M7 14H4M20 10h-3M20 14h-3"/><circle cx="12" cy="12" r="1.5"/></svg>',
+  onewire: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18"/><rect class="ic-fill" x="5" y="4.5" width="4" height="4.5" rx="1"/><rect class="ic-fill" x="10" y="15" width="4" height="4.5" rx="1"/><rect class="ic-fill" x="15" y="4.5" width="4" height="4.5" rx="1"/><path d="M7 9v3M12 12v3M17 9v3"/></svg>',
+  warn: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M12 3.5L21.5 20h-19z"/><path d="M12 10v4.5"/><path class="ic-ray" d="M12 17.3h.01"/></svg>',
+  wifi: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-ray" d="M2.5 9a14 14 0 0 1 19 0"/><path d="M5.5 12.5a9.5 9.5 0 0 1 13 0M9 16a5 5 0 0 1 6 0"/><circle class="ic-fill" cx="12" cy="19.5" r="1"/></svg>',
+  monitor: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect class="ic-fill" x="3" y="4" width="18" height="12.5" rx="2"/><path d="M8 20.5h8M12 16.5v4"/><path class="ic-ray" d="M7 8.5h5M7 12h8"/></svg>',
+  info: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle class="ic-fill" cx="12" cy="12" r="9"/><path d="M12 11v5.5"/><path class="ic-ray" d="M12 7.8h.01"/></svg>',
+  restart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></svg>',
+  xcircle: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle class="ic-fill" cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>',
+  wifioff: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 10a11 11 0 0 1 15 0M8.5 14a5.5 5.5 0 0 1 7 0"/><circle class="ic-solid" cx="12" cy="18.5" r="1"/><path d="M4 3.5l16 17"/></svg>',
+  unlock: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect class="ic-fill" x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 7.6-1.7"/></svg>',
+  belloff: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/><path d="M4 3.5l16 17"/></svg>',
+  plane: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M21 15.5l-8-5V5a1.5 1.5 0 0 0-3 0v5.5l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-3l8 2.5z" transform="translate(1 -.5)"/></svg>',
+  rocket: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M12 2.5c3 2.5 4.5 6 4.5 10v3.5h-9v-3.5c0-4 1.5-7.5 4.5-10z"/><circle cx="12" cy="9.5" r="1.8"/><path d="M7.5 13.5L4.5 17v2.5l3-1.5M16.5 13.5l3 3.5v2.5l-3-1.5"/><path d="M10.5 19.5c0 1.5.8 2.5 1.5 3 .7-.5 1.5-1.5 1.5-3"/></svg>',
+  biohazard: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7.2" r="4.2"/><circle cx="7.8" cy="14.5" r="4.2"/><circle cx="16.2" cy="14.5" r="4.2"/><circle class="ic-solid" cx="12" cy="12" r="1.6"/></svg>',
+  radiation: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M16.7 3.86A9.4 9.4 0 0 0 7.3 3.86L9.7 8.02A4.6 4.6 0 0 1 14.3 8.02z"/><path class="ic-fill" d="M2.6 12.00A9.4 9.4 0 0 0 7.3 20.14L9.7 15.98A4.6 4.6 0 0 1 7.4 12.00z"/><path class="ic-fill" d="M16.7 20.14A9.4 9.4 0 0 0 21.4 12.00L16.6 12.00A4.6 4.6 0 0 1 14.3 15.98z"/><circle class="ic-solid" cx="12" cy="12" r="1.8"/></svg>',
+  rain: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M7 14.5a4 4 0 0 1-.6-7.95A5.5 5.5 0 0 1 17 5.5a4.5 4.5 0 0 1 .5 9z"/><path d="M8 18l-1 2.5M12.5 18l-1 2.5M17 18l-1 2.5"/></svg>',
+  factory: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M3 20.5V11l6 4v-4l6 4V4.5h4.5v16z"/><path d="M7 18h.01M12 18h.01M16.5 18h.01"/></svg>',
+};
+
 const CONFIG = {
   api: {
     stateUrl: '/control_state',
@@ -1728,103 +1922,103 @@ const CONFIG = {
     {
       id: 'telemetry',
       title: 'Telemetry',
-      icon: '🛰️',
+      icon: '🛰️', svg: 'sat',
       type: 'new-telemetry',
       miniMode: 3
     },
     {
       id: 'lighting',
       title: 'Lighting',
-      icon: '💡',
+      icon: '💡', svg: 'bulb',
       type: 'controls',
       items: [
-        { type: 'slider', endpoint: 'mainLight', stateKey: 'mainLight', icon: '🔆', desc: 'Main light', min: 0, max: 100, unit: '%', miniMode: 1,
+        { type: 'slider', endpoint: 'mainLight', stateKey: 'mainLight', icon: '🔆', svg: 'main', desc: 'Main light', min: 0, max: 100, unit: '%', miniMode: 1,
           extra: [ { type: 'color', endpoint: 'mainRGB', stateKey: 'mainRGB' } ] },
-        { type: 'slider', endpoint: 'deskLight', stateKey: 'deskLight', icon: '🔆', desc: 'Desk light', min: 0, max: 100, unit: '%', miniMode: 2 },
-        { type: 'choice', endpoint: 'rgbMode', stateKey: 'rgbMode', icon: '🌈', desc: 'RGB Mode', options: [{ v: 'off', l: 'Off' }, { v: 'rain', l: 'Rain' }, { v: 'rand', l: 'Rand' }] },
-        { type: 'toggle', endpoint: 'backUpLightMain', stateKey: 'backUpLightMain', icon: '🏠', desc: 'Big room light' },
-        { type: 'toggle', endpoint: 'backUpLightKitchen', stateKey: 'backUpLightKitchen', icon: '🍳', desc: 'Kitchen light' },
-        { type: 'toggle', endpoint: 'outsideLight', stateKey: 'outsideLight', icon: '🌙', desc: 'Outside light' },
-        { type: 'choice', endpoint: 'chikenLight', stateKey: 'chiknHouse.lightMode', icon: '🐔', desc: 'Chicken light', options: [{ v: 'off', l: 'Off' }, { v: 'on', l: 'On' }, { v: 'auto', l: 'Auto' }] }
+        { type: 'slider', endpoint: 'deskLight', stateKey: 'deskLight', icon: '🔆', svg: 'desk', desc: 'Desk light', min: 0, max: 100, unit: '%', miniMode: 2 },
+        { type: 'choice', endpoint: 'rgbMode', stateKey: 'rgbMode', icon: '🌈', svg: 'rgb', desc: 'RGB Mode', options: [{ v: 'off', l: 'Off' }, { v: 'rain', l: 'Rain' }, { v: 'rand', l: 'Rand' }] },
+        { type: 'toggle', endpoint: 'backUpLightMain', stateKey: 'backUpLightMain', icon: '🏠', svg: 'room', desc: 'Big room light' },
+        { type: 'toggle', endpoint: 'backUpLightKitchen', stateKey: 'backUpLightKitchen', icon: '🍳', svg: 'kitchen', desc: 'Kitchen light' },
+        { type: 'toggle', endpoint: 'outsideLight', stateKey: 'outsideLight', icon: '🌙', svg: 'outside', desc: 'Outside light' },
+        { type: 'choice', endpoint: 'chikenLight', stateKey: 'chiknHouse.lightMode', icon: '🐔', svg: 'chicken', desc: 'Chicken light', options: [{ v: 'off', l: 'Off' }, { v: 'on', l: 'On' }, { v: 'auto', l: 'Auto' }] }
       ]
     },
     {
       id: 'power',
       title: 'Power & Thermal',
-      icon: '⚡',
+      icon: '⚡', svg: 'bolt',
       type: 'controls',
       items: [
-        { type: 'toggle', endpoint: 'tvOn', stateKey: 'tvOn', icon: '📺', desc: 'LG TV', extraPosition: 'before',
+        { type: 'toggle', endpoint: 'tvOn', stateKey: 'tvOn', icon: '📺', svg: 'tv', desc: 'LG TV', extraPosition: 'before',
           extra: [ { type: 'button', endpoint: 'IR?Blast=20DFA956', desc: 'LG TV Brightness', buttonText: 'Bright' } ] },
-        { type: 'choice', endpoint: 'set_bat_mode', stateKey: 'BMS.batMode', icon: '🔌', desc: 'Charging mode', options: [{ v: 'auto_charging', l: 'Auto' }, { v: 'always_floating', l: 'Float' }] },
-        { type: 'slider', endpoint: 'charge', stateKey: 'BMS.ask_chrg_prc', icon: '🔋', desc: 'Target charge', min: 0, max: 100, unit: '%' },
-        { type: 'slider', endpoint: 'fan', stateKey: 'fanSpeed', icon: '🌀', desc: 'Fan speed', min: 0, max: 100, step: 10, unit: '%' },
-        { type: 'slider', endpoint: 'InvInj', stateKey: 'Inv.inj', icon: '⚡', desc: 'Inject Power', min: 0, max: 255, step: 1, unit: '' }
+        { type: 'choice', endpoint: 'set_bat_mode', stateKey: 'BMS.batMode', icon: '🔌', svg: 'plug', desc: 'Charging mode', options: [{ v: 'auto_charging', l: 'Auto' }, { v: 'always_floating', l: 'Float' }] },
+        { type: 'slider', endpoint: 'charge', stateKey: 'BMS.ask_chrg_prc', icon: '🔋', svg: 'battery', desc: 'Target charge', min: 0, max: 100, unit: '%' },
+        { type: 'slider', endpoint: 'fan', stateKey: 'fanSpeed', icon: '🌀', svg: 'fan', desc: 'Fan speed', min: 0, max: 100, step: 10, unit: '%' },
+        { type: 'slider', endpoint: 'InvInj', stateKey: 'Inv.inj', icon: '⚡', svg: 'bolt', desc: 'Inject Power', min: 0, max: 255, step: 1, unit: '' }
       ]
     },
     {
       id: 'system',
       title: 'System Settings',
-      icon: '⚙️',
+      icon: '⚙️', svg: 'gear',
       type: 'controls',
       items: [
-        { type: 'toggle', endpoint: 'buzzer', stateKey: 'ESP.sound', icon: '🔊', desc: 'Buzzer sound' },
-        { type: 'toggle', endpoint: 'hb', stateKey: 'heartbeat', icon: '💓', desc: 'HeartBeat detection' },
-        { type: 'toggle', endpoint: 'publicAccess', stateKey: 'ESP.publicAccess', icon: '🌐', desc: 'Public access' },
-        { type: 'toggle', endpoint: 'sendDataToServer', stateKey: 'ESP.sendDataToServer', icon: '📡', desc: 'Server uplink' },
-        { type: 'toggle', endpoint: 'sps30_never_sleep', stateKey: 'envr.SPS30.sps30NeverSleep', icon: '💨', desc: 'SPS30 never sleeps' },
-        { type: 'toggle', endpoint: 'useDelta', stateKey: 'ESP.useDelta', icon: '✂️', desc: 'JSON Delta (Diff Mode)' },
-        { type: 'toggle', endpoint: 'power_save', stateKey: 'ESP.powerSave', icon: '🔋', desc: 'Power saving mode' }
+        { type: 'toggle', endpoint: 'buzzer', stateKey: 'ESP.sound', icon: '🔊', svg: 'speaker', desc: 'Buzzer sound' },
+        { type: 'toggle', endpoint: 'hb', stateKey: 'heartbeat', icon: '💓', svg: 'heart', desc: 'HeartBeat detection' },
+        { type: 'toggle', endpoint: 'publicAccess', stateKey: 'ESP.publicAccess', icon: '🌐', svg: 'globe', desc: 'Public access' },
+        { type: 'toggle', endpoint: 'sendDataToServer', stateKey: 'ESP.sendDataToServer', icon: '📡', svg: 'uplink', desc: 'Server uplink' },
+        { type: 'toggle', endpoint: 'sps30_never_sleep', stateKey: 'envr.SPS30.sps30NeverSleep', icon: '💨', svg: 'wind', desc: 'SPS30 never sleeps' },
+        { type: 'toggle', endpoint: 'useDelta', stateKey: 'ESP.useDelta', icon: '✂️', svg: 'delta', desc: 'JSON Delta (Diff Mode)' },
+        { type: 'toggle', endpoint: 'power_save', stateKey: 'ESP.powerSave', icon: '🔋', svg: 'leaf', desc: 'Power saving mode' }
       ]
     },
     {
       id: 'utilities',
       title: 'Utilities',
-      icon: '🧰',
+      icon: '🧰', svg: 'toolbox',
       type: 'links',
       items: [
-        { url: 'littlefs', desc: 'File Manager (LittleFS)', icon: '📁' },
-        { url: 'env.html', desc: 'Environment Monitor', icon: '🌿' },
-        { url: 'buzzer_test.html', desc: 'Test Buzzer', icon: '🔔' },
-        { url: 'json_view.html?feed=control_state&interval=1000', desc: 'JSON Viewer (main)', icon: '🧬' },
-        { url: 'power_monitor.html', desc: 'Power Reference', icon: '⚡' },
+        { url: 'littlefs', desc: 'File Manager (LittleFS)', icon: '📁', svg: 'folder' },
+        { url: 'env.html', desc: 'Environment Monitor', icon: '🌿', svg: 'leaf' },
+        { url: 'buzzer_test.html', desc: 'Test Buzzer', icon: '🔔', svg: 'bell' },
+        { url: 'json_view.html?feed=control_state&interval=1000', desc: 'JSON Viewer (main)', icon: '🧬', svg: 'braces' },
+        { url: 'power_monitor.html', desc: 'Power Reference', icon: '⚡', svg: 'bolt' },
       ]
     },
     {
       id: 'charts_env',
       title: 'Charts',
-      icon: '📐',
+      icon: '📐', svg: 'chart',
       type: 'links',
       items: [
-        { url: 'chart.html?feed=control_state&type=co2', desc: 'CO2 Levels', icon: '🌫️' },
-        { url: 'chart.html?feed=control_state&type=temp', desc: 'Temperature', icon: '🌡️' },
-        { url: 'chart.html?feed=control_state&type=humidity', desc: 'Humidity', icon: '💧' },
-        { url: 'chart.html?feed=control_state&type=pressure', desc: 'Atmospheric Pressure', icon: '⏱️' },
-        { url: 'chart.html?feed=control_state&type=mains', desc: 'AC Mains', icon: '⚡' },
-        { url: 'chart.html?feed=control_state&type=bms', desc: 'BMS Status', icon: '🔋' },
-        { url: 'chart.html?feed=control_state&type=heap', desc: 'Free Heap', icon: '🧠' }
+        { url: 'chart.html?feed=control_state&type=co2', desc: 'CO2 Levels', icon: '🌫️', svg: 'cloud' },
+        { url: 'chart.html?feed=control_state&type=temp', desc: 'Temperature', icon: '🌡️', svg: 'thermo' },
+        { url: 'chart.html?feed=control_state&type=humidity', desc: 'Humidity', icon: '💧', svg: 'drop' },
+        { url: 'chart.html?feed=control_state&type=pressure', desc: 'Atmospheric Pressure', icon: '⏱️', svg: 'gauge' },
+        { url: 'chart.html?feed=control_state&type=mains', desc: 'AC Mains', icon: '⚡', svg: 'acwave' },
+        { url: 'chart.html?feed=control_state&type=bms', desc: 'BMS Status', icon: '🔋', svg: 'battery' },
+        { url: 'chart.html?feed=control_state&type=heap', desc: 'Free Heap', icon: '🧠', svg: 'ram' }
       ]
     },
     {
       id: 'diagnostics',
       title: 'Diagnostics / system',
-      icon: '🛠️',
+      icon: '🛠️', svg: 'wrench',
       type: 'links',
       items: [
-        { url: 'I2C_Server?setUpdt=600', desc: 'I2C address search', icon: '🔌' },
-        { url: 'OneWireServer?setUpdt=600', desc: 'OneWire address search', icon: '🔌' },
-        { url: 'ErrorsDS', desc: 'DS18B20 read errors log', icon: '⚠️' },
-        { url: 'listAP', desc: 'Scan nearby WiFi APs', icon: '🔍' },
-        { url: 'IP_History', desc: 'Connected devices IP list', icon: '🖥️' },
-        { url: 'info', desc: 'ESP System Information', icon: '⚙️' },
-        { url: 'json_view.html?feed=system&interval=1000', desc: 'JSON Viewer (system)', icon: '🧬' },
-        { action: 'restart', desc: 'Restart ESP Device', icon: '🔄' }
+        { url: 'I2C_Server?setUpdt=600', desc: 'I2C address search', icon: '🔌', svg: 'chip' },
+        { url: 'OneWireServer?setUpdt=600', desc: 'OneWire address search', icon: '🔌', svg: 'onewire' },
+        { url: 'ErrorsDS', desc: 'DS18B20 read errors log', icon: '⚠️', svg: 'warn' },
+        { url: 'listAP', desc: 'Scan nearby WiFi APs', icon: '🔍', svg: 'wifi' },
+        { url: 'IP_History', desc: 'Connected devices IP list', icon: '🖥️', svg: 'monitor' },
+        { url: 'info', desc: 'ESP System Information', icon: '⚙️', svg: 'info' },
+        { url: 'json_view.html?feed=system&interval=1000', desc: 'JSON Viewer (system)', icon: '🧬', svg: 'braces' },
+        { action: 'restart', desc: 'Restart ESP Device', icon: '🔄', svg: 'restart' }
       ]
     },
     {
       id: 'raw_data',
       title: 'Endpoints',
-      icon: '🗄️',
+      icon: '🗄️', svg: 'db',
       type: 'table',
       items: [
         { url: '', desc: 'Root' },
@@ -2546,7 +2740,7 @@ updateWarningsBanner(state) {
     let isDirty = !this._lastWarningsList || this._lastWarningsList.length !== list.length;
     if (!isDirty) {
       for (let i = 0; i < list.length; i++) {
-        if (list[i].id !== this._lastWarningsList[i].id || list[i].text !== this._lastWarningsList[i].text) {
+        if (list[i].id !== this._lastWarningsList[i].id || list[i].text !== this._lastWarningsList[i].text || list[i].icon !== this._lastWarningsList[i].icon || list[i].iconColor !== this._lastWarningsList[i].iconColor) {
           isDirty = true;
           break;
         }
@@ -2636,11 +2830,11 @@ updateWarningsBanner(state) {
       if (!pillEl) {
         pillEl = document.createElement('span');
         pillEl.className = className;
-        pillEl.textContent = w.text;
+        this._fillPill(pillEl, w);
         this._warningPillEls.set(w.id, pillEl);
         newPills.push(pillEl);
       } else {
-        if (pillEl.textContent !== w.text) pillEl.textContent = w.text;
+        this._fillPill(pillEl, w);
         if (!pillEl.classList.contains(w.kind)) {
           pillEl.className = `${className}${pillEl.classList.contains('entering') ? ' entering' : ''}`;
         }
@@ -2676,6 +2870,33 @@ updateWarningsBanner(state) {
         newPills.forEach(p => p.classList.remove('entering'));
       }); 
     }
+  },
+
+  // A pill = optional SVG icon + a text span. The text is ALWAYS set via textContent (never HTML),
+  // because some pill text comes from outside data (e.g. alert locations). On refresh only the text
+  // span is touched, and the SVG is swapped only when the icon name actually changes (sun <-> moon).
+  _fillPill(pillEl, w) {
+    const want = (w.icon && SVG_ICONS[w.icon]) ? w.icon : '';
+    if (pillEl._icon !== want) {
+      pillEl._iconEl?.remove();
+      pillEl._iconEl = null;
+      if (want) {
+        const tpl = document.createElement('template');
+        tpl.innerHTML = SVG_ICONS[want];
+        pillEl._iconEl = tpl.content.firstElementChild;
+        pillEl.insertBefore(pillEl._iconEl, pillEl.firstChild);
+      }
+      pillEl._icon = want;
+    }
+    // Optional per-icon colour; empty string = fall back to the pill's own colour (inherited via currentColor).
+    if (pillEl._iconEl) pillEl._iconEl.style.color = w.iconColor || '';
+    if (!pillEl._textEl) {
+      pillEl._textEl = document.createElement('span');
+      pillEl._textEl.className = 'pill-text';
+      pillEl.appendChild(pillEl._textEl);
+    }
+    const txt = String(w.text ?? '');
+    if (pillEl._textEl.textContent !== txt) pillEl._textEl.textContent = txt;
   },
 
   measureWarningsContentHeight(el) {
@@ -2983,7 +3204,7 @@ updateWarningsBanner(state) {
       card.style.setProperty('--wave-delay', `${(i % 6) * 0.12}s`);
       card.innerHTML = `
         <div class="card-header">
-          <span class="icon">${w.icon}</span>
+          <span class="icon"${w.svg ? ` data-ic="${w.svg}"` : ''}>${w.svg && SVG_ICONS[w.svg] ? SVG_ICONS[w.svg] : w.icon}</span>
           <h2>${w.title}</h2>
           ${w.type === 'new-telemetry' ? `
           <div class="telemetry-badges">
@@ -3257,12 +3478,48 @@ updateWarningsBanner(state) {
   // control still has its own stateKey/endpoint and is fully independent
   // for sendControl/registerControl purposes; this only affects layout.
   buildControl(cfg, container) {
+    this.buildControlRow(cfg, container);
+    if (cfg.svg) this.wireStateIcon(cfg, container.lastElementChild);
+  },
+
+  // Keeps an SVG icon in step with its own control: lit when on, and for dimmers the
+  // glow/fill/rays scale with the slider position. It reads the row's own widget after
+  // every server update AND after every local interaction, so it reacts instantly even
+  // though updateUI skips keys the user just touched (CONFIG.api.suppressMs).
+  wireStateIcon(cfg, row) {
+    const icon = row && row.querySelector('.control-icon.has-svg');
+    if (!icon) return;
+    const sync = () => {
+      let lvl = 0;
+      if (cfg.type === 'slider') {
+        const inp = row.querySelector('input[type="range"]');
+        const lo = +cfg.min || 0, hi = +cfg.max;
+        if (inp && hi > lo) lvl = Math.max(0, Math.min(1, (+inp.value - lo) / (hi - lo)));
+      } else if (cfg.type === 'toggle') {
+        lvl = row.querySelector('.switch.is-on') ? 1 : 0;
+      } else if (cfg.type === 'choice') {
+        const i = [...row.querySelectorAll('.segmented button')].findIndex(b => b.classList.contains('is-active'));
+        const v = i >= 0 ? cfg.options[i].v : 'off';
+        lvl = v === 'off' ? 0 : 1;
+      }
+      icon.style.setProperty('--lvl', lvl.toFixed(2));
+      icon.classList.toggle('is-lit', lvl > 0);
+    };
+    this.registerControl(cfg.stateKey, sync);   // registered after the widget's own callback, so it runs after it
+    row.addEventListener('input', sync);
+    row.addEventListener('click', sync);
+    sync();
+  },
+
+  buildControlRow(cfg, container) {
     const row = document.createElement('div');
     row.className = 'control-row';
 
     const info = document.createElement('div');
     info.className = 'control-info';
-    info.innerHTML = `<div class="control-icon">${cfg.icon}</div><div class="control-label">${cfg.desc}</div>`;
+    info.innerHTML = (cfg.svg && SVG_ICONS[cfg.svg]
+      ? `<div class="control-icon has-svg" data-ic="${cfg.svg}">${SVG_ICONS[cfg.svg]}</div>`
+      : `<div class="control-icon">${cfg.icon}</div>`) + `<div class="control-label">${cfg.desc}</div>`;
 
     const extras = cfg.extra || [];
 
@@ -3315,7 +3572,8 @@ updateWarningsBanner(state) {
       a.className = 'link-item';
       if (itm.url) a.href = itm.url.startsWith('http') ? itm.url : `/${itm.url}`;
       
-      a.innerHTML = `<span class="icon">${itm.icon}</span><span class="desc">${itm.desc}</span>`;
+      const hasSvg = itm.svg && SVG_ICONS[itm.svg];
+      a.innerHTML = `<span class="icon"${hasSvg ? ` data-ic="${itm.svg}"` : ''}>${hasSvg ? SVG_ICONS[itm.svg] : itm.icon}</span><span class="desc">${itm.desc}</span>`;
       
       if (itm.action === 'restart') {
         a.href = '#';
