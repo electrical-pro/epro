@@ -403,6 +403,9 @@
   }
   .warn-pill svg .ic-fill  { fill: currentColor; fill-opacity: .25; }
   .warn-pill svg .ic-solid { fill: currentColor; stroke: none; }
+  .warn-pill svg.ic-glow { filter: drop-shadow(0 0 3px currentColor); }   /* opt-in glow in the icon's own colour */
+  .warn-pill svg.ic-flame { width: 15px; height: 15px; }
+  .warn-pill svg.ic-dot { width: 12px; height: 12px; filter: drop-shadow(0 0 3px currentColor); }   /* solid status dot, glows in its own colour */
 
 
   .card-content { padding: var(--row-edge-pad) var(--card-pad-x) calc(var(--row-edge-pad) * 2) var(--card-pad-x); display: flex; flex-direction: column; gap: 6px; }
@@ -504,12 +507,48 @@
      Unlit = dim line art. Lit = tinted with the icon's own colour, soft glow, and the
      .ic-fill / .ic-ray parts brighten. --lvl (0..1) is set from the control's state:
      slider position for dimmers, 1/0 for toggles and choices. */
+  /* ==== ICON COLOURS: the one place to define them ====
+     One line per icon name:  [data-ic="name"] { --ic: <colour when lit>; --ic-glow: <same colour, ~.4 alpha> }
+     No line here = the default below (warm yellow). The same line colours control icons AND link/card icons.
+     Lines with several selectors share one colour (plug+battery+leaf, fan+globe).
+     Sorted A-Z, so just search for the name. (Warning-pill icons are separate: pill colour or add()'s iconColor.) */
   [data-ic] { --ic: #ffd166; --ic-glow: rgba(255, 209, 102, .45); }
-  [data-ic="desk"]    { --ic: #ffb347; --ic-glow: rgba(255, 179, 71, .45); }
-  [data-ic="kitchen"] { --ic: #ff9f5a; --ic-glow: rgba(255, 159, 90, .45); }
-  [data-ic="outside"] { --ic: #7cc7ff; --ic-glow: rgba(124, 199, 255, .45); }
-  [data-ic="chicken"], [data-ic="rooster"] { --ic: #ffb86b; --ic-glow: rgba(255, 184, 107, .45); }
-  [data-ic="rgb"]     { --ic: #ffffff; --ic-glow: rgba(255, 255, 255, .25); }
+  [data-ic="acwave"]                                      { --ic: rgb(255, 225, 77); --ic-glow: rgba(255, 225, 77, .45); }
+  [data-ic="bell"]                                        { --ic: rgb(255, 179, 71); --ic-glow: rgba(255, 179, 71, .45); }
+  [data-ic="bolt"]                                        { --ic: #ffe14d; --ic-glow: rgba(255, 225, 77, .45); }
+  [data-ic="braces"]                                      { --ic: rgb(199, 146, 255); --ic-glow: rgba(199, 146, 255, .45); }
+  [data-ic="chart"]                                       { --ic: #08e18e; --ic-glow: rgba(8, 225, 142, .4); }
+  [data-ic="chicken"]                                     { --ic: #ffb86b; --ic-glow: rgba(255, 184, 107, .45); }
+  [data-ic="chip"]                                        { --ic: rgb(126, 224, 224); --ic-glow: rgba(126, 224, 224, .45); }
+  [data-ic="cloud"]                                       { --ic: rgb(159, 180, 192); --ic-glow: rgba(159, 180, 192, .45); }
+  [data-ic="db"]                                          { --ic: #6ee7d8; --ic-glow: rgba(110, 231, 216, .4); }
+  [data-ic="delta"]                                       { --ic: #ff9f5a; --ic-glow: rgba(255, 159, 90, .45); }
+  [data-ic="desk"]                                        { --ic: #ffb347; --ic-glow: rgba(255, 179, 71, .45); }
+  [data-ic="drop"]                                        { --ic: rgb(92, 200, 255); --ic-glow: rgba(92, 200, 255, .45); }
+  [data-ic="fan"], [data-ic="globe"]                      { --ic: #5cc8ff; --ic-glow: rgba(92, 200, 255, .45); }
+  [data-ic="folder"]                                      { --ic: rgb(255, 200, 87); --ic-glow: rgba(255, 200, 87, .45); }
+  [data-ic="gauge"]                                       { --ic: rgb(110, 231, 216); --ic-glow: rgba(110, 231, 216, .45); }
+  [data-ic="gear"]                                        { --ic: #a9bcc7; --ic-glow: rgba(169, 188, 199, .35); }
+  [data-ic="heart"]                                       { --ic: #ff6b81; --ic-glow: rgba(255, 107, 129, .45); }
+  [data-ic="info"]                                        { --ic: rgb(92, 200, 255); --ic-glow: rgba(92, 200, 255, .45); }
+  [data-ic="kitchen"]                                     { --ic: #ff9f5a; --ic-glow: rgba(255, 159, 90, .45); }
+  [data-ic="monitor"]                                     { --ic: rgb(169, 188, 199); --ic-glow: rgba(169, 188, 199, .45); }
+  [data-ic="onewire"]                                     { --ic: rgb(124, 199, 255); --ic-glow: rgba(124, 199, 255, .45); }
+  [data-ic="outside"]                                     { --ic: #7cc7ff; --ic-glow: rgba(124, 199, 255, .45); }
+  [data-ic="plug"], [data-ic="battery"], [data-ic="leaf"] { --ic: #08e18e; --ic-glow: rgba(8, 225, 142, .4); }
+  [data-ic="ram"]                                         { --ic: rgb(255, 143, 177); --ic-glow: rgba(255, 143, 177, .45); }
+  [data-ic="restart"]                                     { --ic: rgb(255, 100, 100); --ic-glow: rgba(255, 100, 100, .45); }
+  [data-ic="rgb"]                                         { --ic: #ffffff; --ic-glow: rgba(255, 255, 255, .25); }
+  [data-ic="sat"]                                         { --ic: #5cc8ff; --ic-glow: rgba(92, 200, 255, .45); }
+  [data-ic="speaker"]                                     { --ic: #ffb347; --ic-glow: rgba(255, 179, 71, .45); }
+  [data-ic="thermo"]                                      { --ic: rgb(255, 122, 89); --ic-glow: rgba(255, 122, 89, .45); }
+  [data-ic="toolbox"]                                     { --ic: #ff9f5a; --ic-glow: rgba(255, 159, 90, .45); }
+  [data-ic="tv"]                                          { --ic: #7cc7ff; --ic-glow: rgba(124, 199, 255, .45); }
+  [data-ic="uplink"]                                      { --ic: #c792ff; --ic-glow: rgba(199, 146, 255, .45); }
+  [data-ic="warn"]                                        { --ic: rgb(255, 179, 71); --ic-glow: rgba(255, 179, 71, .45); }
+  [data-ic="wifi"]                                        { --ic: rgb(92, 200, 255); --ic-glow: rgba(92, 200, 255, .45); }
+  [data-ic="wind"]                                        { --ic: #7ee0e0; --ic-glow: rgba(126, 224, 224, .4); }
+  [data-ic="wrench"]                                      { --ic: #c792ff; --ic-glow: rgba(199, 146, 255, .45); }
 
   .control-icon svg, .card-header span.icon svg {
     display: block; overflow: visible;
@@ -533,7 +572,7 @@
   .control-icon { --fill-min: .05; --fill-max: .20; --glow-k: 1; }
   .control-icon.is-lit svg .ic-fill { fill-opacity: calc(var(--fill-min) + (var(--fill-max) - var(--fill-min)) * var(--lvl)); }
   .control-icon[data-ic="tv"], .control-icon[data-ic="kitchen"], .control-icon[data-ic="globe"],
-  .control-icon[data-ic="leaf"], .control-icon[data-ic="chicken"], .control-icon[data-ic="rooster"], .control-icon[data-ic="speaker"],
+  .control-icon[data-ic="leaf"], .control-icon[data-ic="chicken"], .control-icon[data-ic="speaker"],
   .control-icon[data-ic="plug"], .control-icon[data-ic="outside"] { --fill-min: .02; --fill-max: .08; --glow-k: .75; }
   .control-icon svg .ic-ray { opacity: .5; transition: opacity var(--dur-snug) ease; }
   .control-icon.is-lit svg .ic-ray { opacity: calc(.45 + .55 * var(--lvl)); }
@@ -547,23 +586,6 @@
   .card-header span.icon svg .ic-fill { fill: currentColor; fill-opacity: .14; }
   .card-header span.icon[data-ic="gear"] svg .ic-fill, .card-header span.icon[data-ic="toolbox"] svg .ic-fill,
   .card-header span.icon[data-ic="db"] svg .ic-fill, .card-header span.icon[data-ic="wrench"] svg .ic-fill { fill-opacity: .08; }
-
-  /* second batch of icon colours */
-  [data-ic="sat"]     { --ic: #5cc8ff; --ic-glow: rgba(92, 200, 255, .45); }
-  [data-ic="bolt"]    { --ic: #ffe14d; --ic-glow: rgba(255, 225, 77, .45); }
-  [data-ic="gear"]    { --ic: #a9bcc7; --ic-glow: rgba(169, 188, 199, .35); }
-  [data-ic="toolbox"] { --ic: #ff9f5a; --ic-glow: rgba(255, 159, 90, .45); }
-  [data-ic="chart"]   { --ic: #08e18e; --ic-glow: rgba(8, 225, 142, .4); }
-  [data-ic="wrench"]  { --ic: #c792ff; --ic-glow: rgba(199, 146, 255, .45); }
-  [data-ic="db"]      { --ic: #6ee7d8; --ic-glow: rgba(110, 231, 216, .4); }
-  [data-ic="tv"]      { --ic: #7cc7ff; --ic-glow: rgba(124, 199, 255, .45); }
-  [data-ic="plug"], [data-ic="battery"], [data-ic="leaf"] { --ic: #08e18e; --ic-glow: rgba(8, 225, 142, .4); }
-  [data-ic="fan"], [data-ic="globe"] { --ic: #5cc8ff; --ic-glow: rgba(92, 200, 255, .45); }
-  [data-ic="speaker"] { --ic: #ffb347; --ic-glow: rgba(255, 179, 71, .45); }
-  [data-ic="heart"]   { --ic: #ff6b81; --ic-glow: rgba(255, 107, 129, .45); }
-  [data-ic="uplink"]  { --ic: #c792ff; --ic-glow: rgba(199, 146, 255, .45); }
-  [data-ic="wind"]    { --ic: #7ee0e0; --ic-glow: rgba(126, 224, 224, .4); }
-  [data-ic="delta"]   { --ic: #ff9f5a; --ic-glow: rgba(255, 159, 90, .45); }
 
   /* Battery: the inner bar IS the slider value (0..1 via --lvl) */
   .control-icon svg .ic-level {
@@ -771,24 +793,6 @@
   .link-item:hover { border-color: var(--text-dim); background: var(--panel-hover); transform: translateY(-1px); }
   .link-item .icon { font-size: 18px; }
   .link-item .desc { font-size: 13px; font-weight: 500; }
-
-  /* third batch: link-card icon colours */
-  [data-ic="folder"] { --ic: rgb(255, 200, 87); --ic-glow: rgba(255, 200, 87, .45); }
-  [data-ic="bell"] { --ic: rgb(255, 179, 71); --ic-glow: rgba(255, 179, 71, .45); }
-  [data-ic="braces"] { --ic: rgb(199, 146, 255); --ic-glow: rgba(199, 146, 255, .45); }
-  [data-ic="cloud"] { --ic: rgb(159, 180, 192); --ic-glow: rgba(159, 180, 192, .45); }
-  [data-ic="thermo"] { --ic: rgb(255, 122, 89); --ic-glow: rgba(255, 122, 89, .45); }
-  [data-ic="drop"] { --ic: rgb(92, 200, 255); --ic-glow: rgba(92, 200, 255, .45); }
-  [data-ic="gauge"] { --ic: rgb(110, 231, 216); --ic-glow: rgba(110, 231, 216, .45); }
-  [data-ic="acwave"] { --ic: rgb(255, 225, 77); --ic-glow: rgba(255, 225, 77, .45); }
-  [data-ic="ram"] { --ic: rgb(255, 143, 177); --ic-glow: rgba(255, 143, 177, .45); }
-  [data-ic="chip"] { --ic: rgb(126, 224, 224); --ic-glow: rgba(126, 224, 224, .45); }
-  [data-ic="onewire"] { --ic: rgb(124, 199, 255); --ic-glow: rgba(124, 199, 255, .45); }
-  [data-ic="warn"] { --ic: rgb(255, 179, 71); --ic-glow: rgba(255, 179, 71, .45); }
-  [data-ic="wifi"] { --ic: rgb(92, 200, 255); --ic-glow: rgba(92, 200, 255, .45); }
-  [data-ic="monitor"] { --ic: rgb(169, 188, 199); --ic-glow: rgba(169, 188, 199, .45); }
-  [data-ic="info"] { --ic: rgb(92, 200, 255); --ic-glow: rgba(92, 200, 255, .45); }
-  [data-ic="restart"] { --ic: rgb(255, 100, 100); --ic-glow: rgba(255, 100, 100, .45); }
 
   /* Link-card icons: always tinted (no on/off state), glow on hover. The slot is a fixed box
      so the pill height doesn't depend on whether it holds an emoji or an SVG. */
@@ -1666,8 +1670,8 @@ const MyTelem = {
       if (war.chem === true) add('chem', 'CHEMICAL ATTACK', 'danger', 'biohazard', '#FFFFFF');
       if (war.nuke === true) add('nuke', 'NUCLEAR ATTACK', 'danger', 'radiation', '#FFFFFF');
 
-      if (war.level === "YELLOW") add('lev_y', '🟡 YELLOW LEVEL', 'warn');
-      else if (war.level === "RED") add('lev_r', '🔴 RED LEVEL', 'danger');
+      if (war.level === "YELLOW") add('lev_y', 'YELLOW LEVEL', 'warn', 'dot', '#FFE600');
+      else if (war.level === "RED") add('lev_r', 'RED LEVEL', 'danger', 'dot', '#FF2B2B');
       else if (war.level === "GREEN") {} // do nothing
       else add('lev_u', 'UNKNOWN LEVEL', 'info', 'warn');
       
@@ -1676,11 +1680,11 @@ const MyTelem = {
     const fi = envr?.FireI2C;
     if (fi) {
         if (fi.error) {
-            add('fireI2C', '🔥 Fire Alarm I2C: ERROR', 'danger');
+            add('fireI2C', 'Fire Alarm I2C: ERROR', 'danger', 'flame', '#FF9A1F');
         } else {
             const val = parseFloat(fi.resultComp);
             if (val > fi.tgv) {
-                add('fireI2C', `🔥 Fire Alarm I2C: FIRE | ${fi.resultComp} | ${fi.resultCompLive}`, 'danger');
+                add('fireI2C', `Fire Alarm I2C: FIRE | ${fi.resultComp} | ${fi.resultCompLive}`, 'danger', 'flame', '#FF9A1F');
             }
         }
     }
@@ -1734,15 +1738,15 @@ const MyTelem = {
     const ss = s?.ESP?.Sun?.SS;
 
     if (stamp !== undefined && sr && ss) {
-      let label, diff;
+      let label, diff, icon, iconColor;
       if (stamp < sr) {                // before sunrise
-        label = '☀️ Sunrise';
+        label = 'Sunrise'; icon = 'sun'; iconColor = '#FFC22D';
         diff = sr - stamp;
       } else if (stamp < ss) {         // daytime
-        label = '🌙 Sunset';
+        label = 'Sunset'; icon = 'moon'; iconColor = '#FFDC82';
         diff = ss - stamp;
       } else {                         // after sunset: next sunrise is tomorrow
-        label = '☀️ Sunrise';
+        label = 'Sunrise'; icon = 'sun'; iconColor = '#FFC22D';
         diff = sr + 86400 - stamp;     // approx, off by a minute or two
       }
 
@@ -1750,7 +1754,7 @@ const MyTelem = {
         const totalSec = Math.round(diff);
         const mins = Math.floor(totalSec / 60);
         const secs = totalSec % 60;
-        add('sun', `${label} in ${mins} Min, ${secs} Sec`, 'ok');
+        add('sun', `${label} in ${mins} Min, ${secs} Sec`, 'ok', icon, iconColor);
       }
     }
 
@@ -1794,6 +1798,10 @@ const MyTelem = {
 };
 
 const SVG_ICONS = {
+  dot: '<svg class="ic-dot" viewBox="0 0 24 24" aria-hidden="true"><circle class="ic-solid" cx="12" cy="12" r="9"/></svg>',   // solid status dot (pills): colour it with add()'s iconColor
+  sun: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-solid" d="M11.56 1.53Q12 1 12.44 1.53L13.95 3.36Q14.56 4.11 15.50 3.86L17.80 3.27Q18.47 3.10 18.51 3.78L18.66 6.16Q18.71 7.12 19.61 7.48L21.82 8.35Q22.46 8.60 22.09 9.18L20.82 11.18Q20.30 12 20.82 12.82L22.09 14.82Q22.46 15.40 21.82 15.65L19.61 16.52Q18.71 16.88 18.66 17.84L18.51 20.22Q18.47 20.90 17.80 20.73L15.50 20.14Q14.56 19.89 13.95 20.64L12.44 22.47Q12 23 11.56 22.47L10.05 20.64Q9.44 19.89 8.50 20.14L6.20 20.73Q5.53 20.90 5.49 20.22L5.34 17.84Q5.29 16.88 4.39 16.52L2.18 15.65Q1.54 15.40 1.91 14.82L3.18 12.82Q3.70 12 3.18 11.18L1.91 9.18Q1.54 8.60 2.18 8.35L4.39 7.48Q5.29 7.12 5.34 6.16L5.49 3.78Q5.53 3.10 6.20 3.27L8.50 3.86Q9.44 4.11 10.05 3.36z"/></svg>',
+  moon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-solid" d="M20.5 13.8A8.5 8.5 0 1 1 10.2 3.5a6.8 6.8 0 0 0 10.3 10.3z"/></svg>',
+  flame: '<svg class="ic-glow ic-flame" viewBox="0 0 24 24" aria-hidden="true"><path class="ic-solid" d="M12 2.2c.5 3.7 5.7 5.8 5.7 11.4a5.7 5.7 0 0 1-11.4 0c0-2.3 1-4 2.3-5.2.2 1.6.9 2.6 1.8 3.2.1-3.6.6-6.2 1.6-9.4zz"/></svg>',
   bulb: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/><path d="M9.5 19h5M10.5 21.5h3"/></svg>',
   main: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5V7"/><path class="ic-fill" d="M4.5 15a7.5 7.5 0 0 1 15 0z"/><path class="ic-ray" d="M8 18.5l-1.2 2.2M12 18.5v3M16 18.5l1.2 2.2"/></svg>',
   desk: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21h8"/><path d="M8 21l.2-6.5 3-3.5"/><circle cx="8.2" cy="14.5" r=".7"/><g transform="rotate(-30 15.5 8.5)"><path class="ic-fill" d="M10.5 8.5a5 5 0 0 1 10 0z"/><path class="ic-ray" d="M12.2 11.7v1.8M15.5 11.7v2.6M18.8 11.7v1.8"/></g></svg>',
@@ -1850,7 +1858,7 @@ const SVG_ICONS = {
 
 const CONFIG = {
   api: {
-    stateUrl: '/control_state',
+    stateUrl: '/main',
     pollInterval: 500,
     // Bumped from 2500ms - purely a secondary mitigation (fewer premature
     // aborts on a connection that would've completed fine). The actual fix
@@ -1980,7 +1988,7 @@ const CONFIG = {
         { url: 'littlefs', desc: 'File Manager (LittleFS)', icon: '📁', svg: 'folder' },
         { url: 'env.html', desc: 'Environment Monitor', icon: '🌿', svg: 'leaf' },
         { url: 'buzzer_test.html', desc: 'Test Buzzer', icon: '🔔', svg: 'bell' },
-        { url: 'json_view.html?feed=control_state&interval=1000', desc: 'JSON Viewer (main)', icon: '🧬', svg: 'braces' },
+        { url: 'json_view.html?feed=main&interval=1000', desc: 'JSON Viewer (main)', icon: '🧬', svg: 'braces' },
         { url: 'power_monitor.html', desc: 'Power Reference', icon: '⚡', svg: 'bolt' },
       ]
     },
@@ -1990,13 +1998,13 @@ const CONFIG = {
       icon: '📐', svg: 'chart',
       type: 'links',
       items: [
-        { url: 'chart.html?feed=control_state&type=co2', desc: 'CO2 Levels', icon: '🌫️', svg: 'cloud' },
-        { url: 'chart.html?feed=control_state&type=temp', desc: 'Temperature', icon: '🌡️', svg: 'thermo' },
-        { url: 'chart.html?feed=control_state&type=humidity', desc: 'Humidity', icon: '💧', svg: 'drop' },
-        { url: 'chart.html?feed=control_state&type=pressure', desc: 'Atmospheric Pressure', icon: '⏱️', svg: 'gauge' },
-        { url: 'chart.html?feed=control_state&type=mains', desc: 'AC Mains', icon: '⚡', svg: 'acwave' },
-        { url: 'chart.html?feed=control_state&type=bms', desc: 'BMS Status', icon: '🔋', svg: 'battery' },
-        { url: 'chart.html?feed=control_state&type=heap', desc: 'Free Heap', icon: '🧠', svg: 'ram' }
+        { url: 'chart.html?feed=main&type=co2', desc: 'CO2 Levels', icon: '🌫️', svg: 'cloud' },
+        { url: 'chart.html?feed=main&type=temp', desc: 'Temperature', icon: '🌡️', svg: 'thermo' },
+        { url: 'chart.html?feed=main&type=humidity', desc: 'Humidity', icon: '💧', svg: 'drop' },
+        { url: 'chart.html?feed=main&type=pressure', desc: 'Atmospheric Pressure', icon: '⏱️', svg: 'gauge' },
+        { url: 'chart.html?feed=main&type=mains', desc: 'AC Mains', icon: '⚡', svg: 'acwave' },
+        { url: 'chart.html?feed=main&type=bms', desc: 'BMS Status', icon: '🔋', svg: 'battery' },
+        { url: 'chart.html?feed=main&type=heap', desc: 'Free Heap', icon: '🧠', svg: 'ram' }
       ]
     },
     {
@@ -2025,7 +2033,7 @@ const CONFIG = {
         { url: 'mainLight?set=100', desc: 'API: Set Main Light (0-100)' },
         { url: 'IR?Blast=20DF906F', desc: 'API: Transmit IR Code' },
         { url: 'bms_raw', desc: 'API: Get RAW HEX from BMS' },
-        { url: 'control_state', desc: 'API: Main JSON endpoint' },
+        { url: 'main', desc: 'API: Main JSON endpoint' },
         { url: 'system', desc: 'API: System JSON endpoint' },
         { url: 'pressureArray', desc: '1-Hour Pressure'},
         { url: 'testDisplays', desc: 'Test 7 seg displays' },
@@ -2185,7 +2193,7 @@ const app = {
     this.initMiniMode();
     this.connectWS();
 
-    // CF mode has no REST fallback to start (there's no /control_state
+    // CF mode has no REST fallback to start (there's no /main
     // proxied through the bridge, and the ESP isn't reachable directly from
     // wherever this page is being loaded) - the CF branch of ws.onclose
     // handles its own retry loop instead, so skip this entirely.
@@ -2544,7 +2552,7 @@ const app = {
 
       if (this.isCfMode) {
         // No REST fallback exists in CF mode - the bridge doesn't proxy
-        // /control_state and the ESP generally isn't reachable directly from
+        // /main and the ESP generally isn't reachable directly from
         // wherever this page is loaded (that's the whole reason to be in CF
         // mode). Just keep retrying the CF connection itself.
         this.logConn(`CF WS closed - retrying in ${CONFIG.ws.reconnectMs / 1000}s`);
