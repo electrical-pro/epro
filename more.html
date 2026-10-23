@@ -3,13 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#0a0e12">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
 <link rel="shortcut icon" href="/favicon.ico">
 <title>ESP Control Center</title>
 
 
 <style>
   :root {
+    /* Tell every browser this is a dark page: Firefox/Safari otherwise draw
+       light scrollbars, light form-control chrome and a white overscroll flash. */
+    color-scheme: dark;
+    scrollbar-color: var(--border-light) var(--bg);
     --max-width: 1650px;
     --grid-min-column: 358px;
     --grid-gap: 24px;
@@ -27,7 +32,7 @@
     --accent: #08e18e;
     --accent-glow: rgba(8, 225, 142, 0.2);
     
-    --danger: #ff5f5f;                        /* pill/UI red: a touch lighter than MyTelem.RED */
+    --danger: #ff5f5f;                     
     --danger-glow: rgba(255, 105, 105, 0.2); /* Added for status-bad */
     
     --info: #5cc8ff;
@@ -107,6 +112,16 @@
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
+  html {
+    background-color: var(--bg);              /* no white flash / rubber-band area (Firefox, Safari) */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent; /* no grey/blue tap flash over the dark UI on iOS/Android */
+  }
+
+  /* Buttons and inputs don't inherit the page font by default in Firefox/Safari */
+  button, input, select, textarea { font-family: inherit; }
+
   body {
     background-color: var(--bg);
     color: var(--text-main);
@@ -114,6 +129,7 @@
     line-height: 1.5;
     padding: 24px;
     min-height: 100vh;
+    min-height: 100dvh;
   }
 
   /* --- Dev-mode banner: shown only when connecting to a devFallbackHost /
@@ -229,13 +245,19 @@
   .card {
     background: var(--panel);
     border: 1px solid var(--border);
+    /* Firefox paints the background underneath the border by default, so on a
+       rounded card the dark fill bleeds through the antialiased border/corner
+       pixels and the border looks darker/dirtier than --border. Clip the fill
+       to the padding box so only the real border colour shows there. */
+    background-clip: padding-box;
     border-radius: var(--radius-lg);
     overflow: hidden;
+    isolation: isolate; /* Safari: keeps rounded clipping correct while ::after animates */
     box-shadow: 0 8px 32px rgba(0,0,0,0.2);
     display: flex;
     flex-direction: column;
     position: relative;
-    transition: background-color var(--dur-snug) ease, opacity var(--dur-snug) ease;
+    transition: background-color var(--dur-snug) ease, border-color var(--dur-snug) ease, opacity var(--dur-snug) ease;
   }
 
   .card-header {
@@ -433,6 +455,7 @@
 
   .dashboard-grid.is-stale .card {
     background-color: var(--border);
+    border-color: var(--border-light); /* card fill == --border here, so the border needs its own lighter shade to stay visible */
   }
 
   .dashboard-grid.is-stale .card::after {
@@ -722,6 +745,7 @@
 
   /* 7. Mozilla Thumb */
   input[type="range"]::-moz-range-thumb {
+    box-sizing: border-box;
     width: var(--range-thumb-size); 
     height: var(--range-thumb-size);
     border-radius: 50%; 
@@ -738,6 +762,7 @@
     display: flex;
     align-items: center;
     background: var(--border);
+    background-clip: padding-box;
     border-radius: var(--radius-sm);
     padding: 4px;
     gap: 8px;
@@ -787,6 +812,7 @@
     display: flex; align-items: center; gap: 12px;
     padding: 12px 16px; border-radius: var(--radius-md);
     background: var(--bg); border: 1px solid var(--border);
+    background-clip: padding-box;
     text-decoration: none; color: var(--text-main);
     transition: var(--transition);
   }
@@ -883,16 +909,16 @@
 
   /* --- Toasts & Modals --- */
   .toast-container { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 12px; z-index: 100; }
-  .toast { background: var(--panel); border: 1px solid var(--danger); color: var(--text-main); padding: 14px 18px; border-radius: var(--radius-md); font-size: 13px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); animation: slideUp var(--dur-base) forwards; }
+  .toast { background: var(--panel); background-clip: padding-box; border: 1px solid var(--danger); color: var(--text-main); padding: 14px 18px; border-radius: var(--radius-md); font-size: 13px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); animation: slideUp var(--dur-base) forwards; }
   
-  .modal-overlay { position: fixed; inset: 0; background: rgba(5,7,9,0.85); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 2000; animation: fadeIn var(--dur-fast) forwards; }
-  .modal-box { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 32px; width: 90%; max-width: 340px; text-align: center; box-shadow: 0 24px 48px rgba(0,0,0,0.5); }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(5,7,9,0.85); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 2000; animation: fadeIn var(--dur-fast) forwards; }
+  .modal-box { background: var(--panel); background-clip: padding-box; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 32px; width: 90%; max-width: 340px; text-align: center; box-shadow: 0 24px 48px rgba(0,0,0,0.5); }
   .modal-box h3 { font-size: 18px; margin-bottom: 8px; }
   .modal-box p { font-size: 14px; color: var(--text-dim); margin-bottom: 24px; }
   .modal-actions { display: flex; gap: 12px; justify-content: center; }
   .btn { padding: 10px 20px; border-radius: var(--radius-sm); border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: var(--transition); color: var(--text-main); }
-  .btn.primary { background: var(--danger); }
-  .btn.primary:hover { background: #ff3333; }
+  .btn.primary { background: #a83c3c; }
+  .btn.primary:hover { background: #d42d2d; }
   .btn.secondary { background: var(--border); }
   .btn.secondary:hover { background: var(--border-light); }
 
@@ -1666,6 +1692,7 @@ const MyTelem = {
       if (war.neptuneActive) add('NeptunLocal', 'NEPTUN', 'danger', 'rocket', '#FFFFFF');
       if (war.teleActive) add('teleActive', 'TELE LOCAL', 'danger', 'rocket', '#FFFFFF');
       if (war.rapid)      add('HasActivityRapid', 'RAPID', 'danger', 'rocket', '#FFFFFF');
+      if (war.ballistic)  add('HasBall', 'BALLISTIC', 'danger', 'rocket', '#FFFFFF');
 
       if (war.chem === true) add('chem', 'CHEMICAL ATTACK', 'danger', 'biohazard', '#FFFFFF');
       if (war.nuke === true) add('nuke', 'NUCLEAR ATTACK', 'danger', 'radiation', '#FFFFFF');
@@ -1673,7 +1700,7 @@ const MyTelem = {
       if (war.level === "YELLOW") add('lev_y', 'YELLOW LEVEL', 'warn', 'dot', '#FFE600');
       else if (war.level === "RED") add('lev_r', 'RED LEVEL', 'danger', 'dot', '#FF2B2B');
       else if (war.level === "GREEN") {} // do nothing
-      else add('lev_u', 'UNKNOWN LEVEL', 'info', 'warn');
+      else add('lev_u', 'UNKNOWN LEVEL', 'info');
       
     }
 
@@ -1713,11 +1740,16 @@ const MyTelem = {
     // ======== short lived  ====================//
     if (war) {
       if (war.lastUpdtUkrBeat !== undefined && (now - war.lastUpdtUkrBeat) < 3800) {
-        add('ukrOk', `Ukr · OK · ${war.alertsTotal}`, 'info');
+        add('ukrOk', `Ukr · WS OK · ${war.alertsTotal}`, 'info');
       }
       if (war.lastUpdtUkrMap !== undefined && (now - war.lastUpdtUkrMap) < 10200) {
         add('ukrMapUpdate', `UkrAlarm MAP Update · ${war.alertsTotal}`, 'warn');
       }
+    }
+
+    if (war.lastUpdtUkrBeat !== undefined) {
+        let max_val = now - war.lastUpdtUkrBeat;
+        if (max_val > 30000) add('updtElapsed', `MAP: NO WS UPDATE IN ${(max_val / 1000).toFixed(1)} SEC`, 'danger');
     }
 
     if (esp?.dsTempLast !== undefined &&
@@ -1998,13 +2030,13 @@ const CONFIG = {
       icon: '📐', svg: 'chart',
       type: 'links',
       items: [
-        { url: 'chart.html?feed=main&type=co2', desc: 'CO2 Levels', icon: '🌫️', svg: 'cloud' },
-        { url: 'chart.html?feed=main&type=temp', desc: 'Temperature', icon: '🌡️', svg: 'thermo' },
-        { url: 'chart.html?feed=main&type=humidity', desc: 'Humidity', icon: '💧', svg: 'drop' },
-        { url: 'chart.html?feed=main&type=pressure', desc: 'Atmospheric Pressure', icon: '⏱️', svg: 'gauge' },
-        { url: 'chart.html?feed=main&type=mains', desc: 'AC Mains', icon: '⚡', svg: 'acwave' },
-        { url: 'chart.html?feed=main&type=bms', desc: 'BMS Status', icon: '🔋', svg: 'battery' },
-        { url: 'chart.html?feed=main&type=heap', desc: 'Free Heap', icon: '🧠', svg: 'ram' }
+        { url: 'chart.html?type=co2', desc: 'CO2 Levels', icon: '🌫️', svg: 'cloud' },
+        { url: 'chart.html?type=temp', desc: 'Temperature', icon: '🌡️', svg: 'thermo' },
+        { url: 'chart.html?type=humidity', desc: 'Humidity', icon: '💧', svg: 'drop' },
+        { url: 'chart.html?type=pressure', desc: 'Atmospheric Pressure', icon: '⏱️', svg: 'gauge' },
+        { url: 'chart.html?type=mains', desc: 'AC Mains', icon: '⚡', svg: 'acwave' },
+        { url: 'chart.html?type=bms', desc: 'BMS Status', icon: '🔋', svg: 'battery' },
+        { url: 'chart.html?type=heap', desc: 'Free Heap', icon: '🧠', svg: 'ram' }
       ]
     },
     {
