@@ -1100,12 +1100,18 @@ const MyTelem = {
   pl(text, color) { return `<span class="tm-pill" style="color:${color};background:${color}26">${text}</span>`; },
 
   // Wraps a group of lines - no <hr> baked in here anymore. Separators are
-  // now render()'s job to place explicitly between sections, so there's
+  // now renderItems()'s job to place explicitly between sections, so there's
   // never a stray leading hr above the very first line.
+  // Marker for a separator in the flat item list built by renderItems().
+  HR: '<hr>',
+
+  // Returns the section's lines as an array of HTML strings (NOT wrapped in
+  // <div class="line"> - app.patchTelemetry() owns the wrapper elements, so it
+  // can keep each one alive and only touch the ones whose text changed).
+  // Empty array = nothing to show for this section.
   section(lines) {
-    const filtered = lines.filter(Boolean);
-    if (!filtered.length) return '';
-    return filtered.map(l => `<div class="line">${l}</div>`).join('');
+    return lines.filter(Boolean)
+                .map(l => l.replaceAll('|', '<span class="sepTel">|</span>'));
   },
 
   formatDuration(totalSec) {
@@ -1125,20 +1131,25 @@ const MyTelem = {
     return this.formatDuration((now - past) / 1000);
   },
 
+  // Single source of truth for the "connected clients" text. Used by clientPills()
+  // below (mini mode) AND by app.updateTelemetryBadges() (card-header badge), so the
+  // two can no longer drift apart. Returns [] until the ESP has reported WS at all.
+  clientParts(conn) {
+    if (conn?.WS === undefined) return [];
+    const ws = conn.WS;
+    const rs = conn.RS ?? 0;
+    // Show both if both are 0 (an anomaly worth seeing)
+    if (ws === 0 && rs === 0) return ['WS: 0 R: 0'];
+    const parts = [];
+    if (ws !== 0) parts.push(`WS: ${ws}`);
+    if (rs !== 0) parts.push(`R: ${rs}`);
+    return parts;
+  },
+
   clientPills(s, now) {
     const conn = s?.ESP?.Conn;
     if (!conn) return [];
-    const parts = [];
-    // Show both if both are 0
-    if (conn.WS === 0 && conn.RS === 0) {
-      parts.push(this.pl("WS: 0 R: 0", MyTelem.GREEN));
-    } else {
-      if (conn.WS !== 0)
-        parts.push(this.pl(`WS: ${conn.WS}`, MyTelem.GREEN));
-
-      if (conn.RS !== 0)
-        parts.push(this.pl(`R: ${conn.RS}`, MyTelem.GREEN));
-    }
+    const parts = this.clientParts(conn).map(t => this.pl(t, MyTelem.GREEN));
     parts.push(this.pl(`MS: ${now}`, MyTelem.BLUE));
     return [parts.join(" ")];
   },
@@ -1200,17 +1211,18 @@ const MyTelem = {
       if(db.W2 - db.W > 0)
       {
         
+        let curPill;
         if(db.A - db.A2 < 0)
-        cur_pill = this.pl(`GOOD ✔️ ${db.A.toFixed(2)} / ${db.A2.toFixed(2)} A`, MyTelem.BLUE);
+        curPill = this.pl(`GOOD ✔️ ${db.A.toFixed(2)} / ${db.A2.toFixed(2)} A`, MyTelem.BLUE);
         else
-        cur_pill = this.pl(`HIGH 🟡 ${db.A.toFixed(2)} / ${db.A2.toFixed(2)} A`, MyTelem.YELLOW);
+        curPill = this.pl(`HIGH 🟡 ${db.A.toFixed(2)} / ${db.A2.toFixed(2)} A`, MyTelem.YELLOW);
 
-        pill = this.pl('INJ', MyTelem.YELLOW);
-        lines.push(`Lab: ${(db.W2 - db.W).toFixed(1)} W ` + '⚡' + pill + " " + cur_pill);
+        const pill = this.pl('INJ', MyTelem.YELLOW);
+        lines.push(`Lab: ${(db.W2 - db.W).toFixed(1)} W ` + '⚡' + pill + " " + curPill);
       }
       else
       {
-        pill = this.pl('CONSUMING', MyTelem.BLUE);
+        const pill = this.pl('CONSUMING', MyTelem.BLUE);
         lines.push(`Lab: ${(db.W - db.W2).toFixed(1)} W ` + pill);
       }
       
@@ -1628,7 +1640,11 @@ const MyTelem = {
     const bms = s?.BMS;
     const envr = s?.envr;
     const war = s?.envr?.war;
-    const mc2p5 = s?.envr?.SPS30?.mc2p5?.toFixed(1);
+    // Numeric, rounded to 1 decimal (same value the old toFixed(1) produced, but kept as a
+    // number so the threshold comparisons below are real numeric comparisons).
+    // NaN when the sensor value is missing, which makes every comparison false.
+    const pm25Raw = s?.envr?.SPS30?.mc2p5;
+    const mc2p5 = Number.isFinite(pm25Raw) ? Number(pm25Raw.toFixed(1)) : NaN;
     const co2 = s?.envr?.SCD30?.co2;
     const temp = s?.envr?.temp;
     // add(id, text, kind, icon, iconColor): iconColor is optional (any CSS colour, e.g. '#ffd166' or 'var(--warn)').
@@ -1677,8 +1693,10 @@ const MyTelem = {
     if (s?.backUpLightMain === true) add('lightsMain', 'BIG ROOM LIGHTS ON', 'warn', 'bulb', '#FFFFFF');
     if (s?.backUpLightKitchen === true) add('lightsKitchen', 'KITCHEN LIGHTS ON', 'warn', 'bulb', '#FFFFFF');
     if (s?.outsideLight === true) add('lightsOutside', 'OUTSIDE LIGHTS ON', 'warn', 'bulb', '#FFFFFF');
-    if (s?.heartbeat !== true) add('heartbeatOff', 'HB DETECT IS OFF', 'danger', 'xcircle', '#FFFFFF');
-    if (esp?.sound !== true) add('buzzerOff', 'BUZZER IS OFF', 'danger', 'belloff', '#FFFFFF');
+    // === false (not !== true): before the first snapshot these are undefined, and
+    // "not known yet" must not flash up as "OFF".
+    if (s?.heartbeat === false) add('heartbeatOff', 'HB DETECT IS OFF', 'danger', 'xcircle', '#FFFFFF');
+    if (esp?.sound === false) add('buzzerOff', 'BUZZER IS OFF', 'danger', 'belloff', '#FFFFFF');
     if (esp?.bzzPlay === true) add('bzzPlay', 'Bzz', 'warn', 'bell');
 
     if (s?.tvOn === true) add('tvOn', 'TV is ON', 'info', 'tv', '#FFFFFF');
@@ -1729,8 +1747,8 @@ const MyTelem = {
 
 
     // PM2.5 (µg/m³)
-    if (mc2p5 > 125.4) add('mc2p5', `PM2.5: ${mc2p5} µg/m³`, 'danger', 'factory', '#FFFFFF');
-    else if (mc2p5 > 55.4) add('mc2p5', `PM2.5: ${mc2p5} µg/m³`, 'warn', 'factory', '#FFFFFF');
+    if (mc2p5 > 125.4) add('mc2p5', `PM2.5: ${mc2p5.toFixed(1)} µg/m³`, 'danger', 'factory', '#FFFFFF');
+    else if (mc2p5 > 55.4) add('mc2p5', `PM2.5: ${mc2p5.toFixed(1)} µg/m³`, 'warn', 'factory', '#FFFFFF');
 
     // CO₂ (ppm)
     if (co2 > 2500) add('co2', `CO2: ${co2} ppm`, 'danger', 'wind', '#FFFFFF');
@@ -1747,7 +1765,7 @@ const MyTelem = {
       }
     }
 
-    if (war.lastUpdtUkrBeat !== undefined) {
+    if (war?.lastUpdtUkrBeat !== undefined) {
         let max_val = now - war.lastUpdtUkrBeat;
         if (max_val > 30000) add('updtElapsed', `MAP: NO WS UPDATE IN ${(max_val / 1000).toFixed(1)} SEC`, 'danger');
     }
@@ -1807,11 +1825,14 @@ const MyTelem = {
   },
 
   // ---------- main render, same shape as the original render(state) ----------
-  render(state, isMini) {
+  // Returns a FLAT list: line HTML strings with MyTelem.HR between sections
+  // (same visual structure as before - lines and <hr>s as direct siblings, which
+  // the .telemetry-new :first-child/:last-child padding rules depend on).
+  renderItems(state, isMini) {
     const now = state?.ESP?.Time?.Mls ?? 0;
 
     const parts = [
-      isMini ? this.section(this.clientPills(state, now)) : '',
+      isMini ? this.section(this.clientPills(state, now)) : [],
       this.section(this.tempLines(state)),
       this.section(this.acPowerLines(state, now)),
       this.section(this.bmsLines(state)),
@@ -1823,9 +1844,14 @@ const MyTelem = {
       this.section(this.sunLines(state)),
       this.section(this.loopLines(state))
       // warningsLines moved out to the top warnings-banner (see app.updateWarningsBanner)
-    ].filter(Boolean);
+    ].filter(s => s.length);
 
-    return parts.join('<hr>').replaceAll('|', '<span class="sepTel">|</span>');
+    const items = [];
+    parts.forEach((p, i) => {
+      if (i) items.push(this.HR);
+      items.push(...p);
+    });
+    return items;
   }
 };
 
@@ -1905,7 +1931,7 @@ const CONFIG = {
   },
   ws: {
     port: 8092,
-    reconnectMs: 5000,
+    reconnectMs: 3000,
     reqDelayMs: 123,
     // Used ONLY when this page is opened straight from disk (file://) or a
     // ?devHost=<ip> query param is present - never applies when served from
@@ -1917,7 +1943,7 @@ const CONFIG = {
     // connecting), the getData loop has stalled without the socket actually
     // closing - force-close it so the existing onclose/reconnect + REST
     // fallback path takes over. Generous multiple of reqDelayMs.
-    silenceMs: 6000,
+    silenceMs: 4000,
     // Gap between one control-set finishing (acked) and the next queued one
     // going out, when sending over WS. Much shorter than the REST gap since
     // there's no per-request HTTP overhead - just enough to not flood a
@@ -1926,7 +1952,7 @@ const CONFIG = {
     // If the ESP doesn't send dataAck:<key> back within this long, treat the
     // write as failed (toast) and unblock the queue anyway rather than
     // stalling forever.
-    setAckTimeoutMs: 2000,
+    setAckTimeoutMs: 2500,
     // CF relay mode only. Much longer than reqDelayMs (123ms) on purpose -
     // this isn't a same-LAN round trip, it's browser -> CF edge -> ESP's own
     // WS client -> back. If a getData?deltaRandomId=X request doesn't get a
@@ -1934,7 +1960,7 @@ const CONFIG = {
     // and reconnected mid-request), sendGetData() burns that deltaRandomId
     // and retries with a fresh one - see the comment there for why burning
     // it is required, not just a retry-with-same-id.
-    cfRequestTimeoutMs: 3000
+    cfRequestTimeoutMs: 3500
   },
   stats: {
     // If a pending getData request has been waiting longer than this
@@ -2543,19 +2569,28 @@ const app = {
       const size = typeof e.data === 'string' ? textEncoder.encode(e.data).length : (e.data.byteLength || e.data.size || 0);
       this.recordRx(size, rt);
 
+      let applied = false; // true once this message has been merged into currentState
       try {
         const data = JSON.parse(e.data);
         
         // Merge delta or full snapshot into the state
         this.currentState = this.deepMerge(this.currentState, data);
+        applied = true;
         this.updateUI(this.currentState);
 
-        // Schedule next delta request
+      } catch(err) {
+        console.error(applied ? "WS UI update error" : "WS Parse error", err);
+        // CF mode only: if the reply was lost/garbled BEFORE it was merged, the ESP may
+        // already have advanced its baseline for this deltaRandomId, so burn the id and
+        // get a full snapshot next (same reasoning as pollStateREST's catch block).
+        if (!applied && this.isCfMode) {
+          this.cfDeltaId = Math.floor(Math.random() * (1000000 - 100 + 1)) + 100;
+        }
+      } finally {
+        // Always schedule the next request, whatever happened above (bad message, or an
+        // exception while rendering). Otherwise the loop stalls until the silence watchdog.
         clearTimeout(this.wsDataTimeout);
         this.wsDataTimeout = setTimeout(() => this.sendGetData(), CONFIG.ws.reqDelayMs);
-
-      } catch(err) {
-        console.error("WS Parse error", err);
       }
     };
 
@@ -2569,7 +2604,8 @@ const app = {
       // time, so the retried send will naturally go out over REST instead
       // (direct mode) - in CF mode there's nowhere else for it to go until
       // reconnected, so it'll just get requeued next time the queue flushes.
-      Object.values(this.wsAckWaiters).forEach(waiter => waiter());
+      // (They count as failed: no ack arrived, so controls go back to the last server value.)
+      Object.values(this.wsAckWaiters).forEach(waiter => waiter(true));
       this.wsAckWaiters = {};
 
       // If we closed this ourselves for the background pause, none of the
@@ -2723,6 +2759,65 @@ const app = {
     }
   },
 
+  // Which telemetry view is actually on screen right now. Mini view only exists
+  // at mobile width AND only shows while mini mode is on; everywhere else the full
+  // card is the one you see. Deliberately NOT read from the body.mini-active class
+  // or from layout: the class stays set after resizing a mobile window up to desktop
+  // width (the CSS that hides #dashboard lives inside the media query), and layout
+  // reads (offsetParent etc.) would force a reflow on every tick.
+  visibleTelemetry() {
+    const mini = !!(this._mql && this._mql.matches && this.miniMode);
+    return { full: !mini, mini };
+  },
+
+  // Builds + patches only the telemetry view the user can see. The hidden one keeps
+  // its last content until it becomes visible again, at which point refreshTelemetry()
+  // redraws it immediately (view toggle / breakpoint change) instead of waiting for
+  // the next data tick.
+  renderTelemetry(state) {
+    const v = this.visibleTelemetry();
+    if (v.full && this.els.MyTelem) {
+      this.patchTelemetry(this.els.MyTelem, MyTelem.renderItems(state, false));
+    }
+    if (v.mini && this.els.MyTelemMini) {
+      this.patchTelemetry(this.els.MyTelemMini, MyTelem.renderItems(state, true));
+    }
+  },
+
+  // Redraw from the last known state right now (no-op until the first data arrives).
+  refreshTelemetry() {
+    if (Object.keys(this.currentState).length) this.renderTelemetry(this.currentState);
+  },
+
+  // Reconciles the telemetry container against a flat item list (see
+  // MyTelem.renderItems) instead of replacing its whole innerHTML every tick.
+  // Each .line / <hr> element stays alive between updates and a line's
+  // innerHTML is only written when its text actually differs from what that
+  // element last showed (cached on the element as _html, because reading
+  // innerHTML back gives browser-normalised markup that never string-matches).
+  // Typical tick: most lines identical -> zero DOM writes for them; only the
+  // fast-changing ones (uptime seconds, sun countdown, MS pill...) are touched.
+  // Matching is by position, so if a line appears/disappears mid-list the lines
+  // after it simply get rewritten once - still correct, just a few extra writes.
+  patchTelemetry(container, items) {
+    const kids = container.children;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const wantHr = item === MyTelem.HR;
+      const el = kids[i];
+
+      if (el && (el.tagName === 'HR') === wantHr) {
+        if (!wantHr && el._html !== item) { el.innerHTML = item; el._html = item; }
+        continue;
+      }
+
+      const node = document.createElement(wantHr ? 'hr' : 'div');
+      if (!wantHr) { node.className = 'line'; node.innerHTML = item; node._html = item; }
+      if (el) container.replaceChild(node, el); else container.appendChild(node);
+    }
+    while (container.children.length > items.length) container.lastElementChild.remove();
+  },
+
   updateUI(state) {
     const now = Date.now();
     for (const [key, renderFns] of Object.entries(this.controls)) {
@@ -2732,14 +2827,9 @@ const app = {
       }
     }
 
-    // Read-only, so no suppression concerns - just redraw from the latest
-    // merged state every time, same cadence as the controls above.
-    if (this.els.MyTelem) {
-      this.els.MyTelem.innerHTML = MyTelem.render(state, false);
-    }
-    if (this.els.MyTelemMini) {
-      this.els.MyTelemMini.innerHTML = MyTelem.render(state, true);
-    }
+    // Read-only, so no suppression concerns - re-evaluated from the latest
+    // merged state every tick, but only the lines whose text changed touch the DOM.
+    this.renderTelemetry(state);
 
     this.updateEnvTimeIndicator(state);
     this.updateTelemetryBadges(state);
@@ -3020,25 +3110,8 @@ updateWarningsBanner(state) {
 
   updateTelemetryBadges(state) {
     if (this.els.badgeClients) {
-      const conn = state?.ESP?.Conn;
-
-      if (conn?.WS !== undefined) {
-        const wsClients = conn.WS;
-        const restClients = conn.RS
-
-        // If both are 0, show the anomaly.
-        if (wsClients === 0 && restClients === 0) {
-          this.els.badgeClients.textContent = "WS: 0 R: 0";
-        } else {
-          // Otherwise, only push the ones that are not 0 into an array
-          const parts = [];
-          if (wsClients !== 0) parts.push(`WS: ${wsClients}`);
-          if (restClients !== 0) parts.push(`R: ${restClients}`);
-
-          // Join them with a space
-          this.els.badgeClients.textContent = parts.join(" ");
-        }
-      }
+      const parts = MyTelem.clientParts(state?.ESP?.Conn);
+      if (parts.length) this.els.badgeClients.textContent = parts.join(" ");
     }
 
     if (this.els.badgeMs) {
@@ -3151,6 +3224,27 @@ updateWarningsBanner(state) {
     }
   },
 
+  // A write failed (no ack, send error, REST error/non-2xx, socket closed first).
+  // The control was already moved optimistically (slider dragged, switch flipped)
+  // and updateUI is told to leave this key alone for CONFIG.api.suppressMs, so
+  // without this the UI would keep showing a value the ESP never accepted.
+  // Lift the suppression and redraw from currentState, i.e. the last value the
+  // ESP actually reported - server pushes keep being merged into currentState
+  // even while a key is suppressed, so this is the latest known truth. If the
+  // write DID land and only the ack was lost, the next push says so and the UI
+  // simply corrects itself again.
+  // Skipped while a newer value for the same control is already queued (the user
+  // is still dragging): that attempt will decide the outcome, and snapping the
+  // control back under their finger would be worse than the stale moment.
+  revertControl(cfg, q) {
+    if (q && q.pending !== null) return;
+    const key = cfg.stateKey;
+    this.lastChange[key] = 0;
+    const val = this.getByPath(this.currentState, key);
+    if (val === undefined) return;   // nothing known to go back to yet
+    (this.controls[key] || []).forEach(fn => fn(val));
+  },
+
   // Fast path: no "endpoint" concept needed here like the REST routes use -
   // just the stateKey and the new value, so the ESP can look up and apply it
   // directly. Only serialized per-stateKey (via q.sending), so dragging two
@@ -3164,18 +3258,21 @@ updateWarningsBanner(state) {
     const payloadValue = cfg.type === 'slider' ? Number(val) : val;
 
     let settled = false;
-    const finish = () => {
+    // failed = no ack in time, a send error, or the socket closed before the ack came.
+    // The normal ack path (onmessage -> waiter()) passes nothing, so it counts as success.
+    const finish = (failed = false) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeoutId);
       delete this.wsAckWaiters[key];
-      this.lastChange[key] = Date.now();
+      if (failed) this.revertControl(cfg, q);
+      else this.lastChange[key] = Date.now();
       setTimeout(() => { q.sending = false; this.flushQueue(cfg, q); }, CONFIG.ws.setGapMs);
     };
 
     const timeoutId = setTimeout(() => {
       this.showError(`${cfg.desc} did not acknowledge in time`);
-      finish();
+      finish(true);
     }, CONFIG.ws.setAckTimeoutMs);
 
     this.wsAckWaiters[key] = finish;
@@ -3184,19 +3281,21 @@ updateWarningsBanner(state) {
       this.ws.send(JSON.stringify({ key, value: payloadValue }));
     } catch (err) {
       this.showError(`Failed to send ${cfg.desc} over WS`);
-      finish();
+      finish(true);
     }
   },
 
   // Unchanged REST fallback path - used whenever WS isn't connected.
   sendControlREST(cfg, val, q) {
+    let failed = false;
     this.fetchTracked(`/${cfg.endpoint}?set=${val}`)
       .then(res => {
-        if (!res.ok) this.showError(`${cfg.desc} responded with ${res.status}`);
+        if (!res.ok) { failed = true; this.showError(`${cfg.desc} responded with ${res.status}`); }
       })
-      .catch(() => this.showError(`Failed to set ${cfg.desc}`))
+      .catch(() => { failed = true; this.showError(`Failed to set ${cfg.desc}`); })
       .finally(() => {
-        this.lastChange[cfg.stateKey] = Date.now();
+        if (failed) this.revertControl(cfg, q);
+        else this.lastChange[cfg.stateKey] = Date.now();
         setTimeout(() => { q.sending = false; this.flushQueue(cfg, q); }, CONFIG.api.setGapMs);
       });
   },
@@ -3340,6 +3439,7 @@ updateWarningsBanner(state) {
   // that's happened yet.
   initMiniMode() {
     const mql = window.matchMedia('(max-width: 768px)');
+    this._mql = mql;   // read by visibleTelemetry() to know which telemetry view is on screen
     this._miniModeActivated = false;
 
     const activateIfMobile = () => {
@@ -3355,7 +3455,10 @@ updateWarningsBanner(state) {
     };
 
     activateIfMobile();
-    mql.addEventListener('change', activateIfMobile);
+    mql.addEventListener('change', () => {
+      activateIfMobile();
+      this.refreshTelemetry();   // the view that just became visible may be stale
+    });
 
     this.els.modeToggleBtn?.addEventListener('click', () => {
       activateIfMobile();
@@ -3368,6 +3471,7 @@ updateWarningsBanner(state) {
   applyMiniMode() {
     document.body.classList.toggle('mini-active', this.miniMode);
     if (this.els.modeToggleBtn) this.els.modeToggleBtn.textContent = this.miniMode ? 'GO FULL' : 'GO MINI';
+    this.refreshTelemetry();   // the view that was hidden has old content - redraw it now
   },
 
   // Registers a render callback for a state key. Most keys only ever have
@@ -3377,6 +3481,18 @@ updateWarningsBanner(state) {
   // gets called on update. See updateUI's loop below.
   registerControl(key, fn) {
     (this.controls[key] ||= []).push(fn);
+  },
+
+  // Pushes a value the user just set on one instance of a control to every OTHER
+  // instance of it (full dashboard <-> mini view). Needed because updateUI leaves
+  // a key alone for CONFIG.api.suppressMs after a local change (so a server push
+  // can't overwrite what the user is doing), and that skip is per KEY, not per
+  // on-screen copy: the copy the user did NOT touch used to sit stale until the
+  // window expired - and a stale toggle's `current` made the next tap send the
+  // wrong value. `source` is the touched instance's own render callback, skipped
+  // so we never rewrite the control the user is actively holding.
+  syncSiblings(key, val, source) {
+    (this.controls[key] || []).forEach(fn => { if (fn !== source) fn(val); });
   },
 
   // Builds just the interactive part of a control (slider/toggle/choice/
@@ -3395,15 +3511,18 @@ updateWarningsBanner(state) {
       const inp = document.createElement('input');
       inp.type = 'range'; inp.min = cfg.min; inp.max = cfg.max; inp.step = cfg.step || 1;
 
+      const render = (val) => {
+        inp.value = val;
+        if (onValue) onValue(val);
+      };
+
       inp.oninput = () => {
         if (onValue) onValue(inp.value);
+        this.syncSiblings(cfg.stateKey, inp.value, render);
         this.sendControl(cfg, inp.value);
       };
 
-      this.registerControl(cfg.stateKey, (val) => {
-        inp.value = val;
-        if (onValue) onValue(val);
-      });
+      this.registerControl(cfg.stateKey, render);
 
       return inp;
     }
@@ -3413,16 +3532,19 @@ updateWarningsBanner(state) {
       sw.className = 'switch';
       let current = false;
 
+      const render = (val) => {
+        current = !!val;
+        sw.classList.toggle('is-on', current);
+      };
+
       sw.onclick = () => {
         current = !current;
         sw.classList.toggle('is-on', current);
+        this.syncSiblings(cfg.stateKey, current, render);
         this.sendControl(cfg, current ? true : false);
       };
 
-      this.registerControl(cfg.stateKey, (val) => {
-        current = !!val;
-        sw.classList.toggle('is-on', current);
-      });
+      this.registerControl(cfg.stateKey, render);
       return sw;
     }
 
@@ -3435,15 +3557,17 @@ updateWarningsBanner(state) {
         b.onclick = () => {
           btns.forEach(item => item.el.classList.remove('is-active'));
           b.classList.add('is-active');
+          this.syncSiblings(cfg.stateKey, o.v, render);
           this.sendControl(cfg, o.v);
         };
         seg.appendChild(b);
         return { val: o.v, el: b };
       });
 
-      this.registerControl(cfg.stateKey, (val) => {
+      const render = (val) => {
         btns.forEach(item => item.el.classList.toggle('is-active', item.val === val));
-      });
+      };
+      this.registerControl(cfg.stateKey, render);
       return seg;
     }
 
@@ -3463,19 +3587,22 @@ updateWarningsBanner(state) {
       inp.type = 'color';
       inp.className = 'hidden-picker';
 
-      inp.oninput = (e) => {
-        const hex = e.target.value.toUpperCase();
-        label.textContent = hex;
-        swatch.style.backgroundColor = hex;
-        this.sendControl(cfg, hex.substring(1));
-      };
-
-      this.registerControl(cfg.stateKey, (val) => {
+      const render = (val) => {
         const hex = val.startsWith('#') ? val : '#' + val;
         inp.value = hex;
         label.textContent = hex;
         swatch.style.backgroundColor = hex;
-      });
+      };
+
+      inp.oninput = (e) => {
+        const hex = e.target.value.toUpperCase();
+        label.textContent = hex;
+        swatch.style.backgroundColor = hex;
+        this.syncSiblings(cfg.stateKey, hex.substring(1), render);
+        this.sendControl(cfg, hex.substring(1));
+      };
+
+      this.registerControl(cfg.stateKey, render);
 
       wrapper.appendChild(swatch);
       wrapper.appendChild(label);
