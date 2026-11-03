@@ -1300,6 +1300,22 @@ const MyTelem = {
       }
     }
 
+    // Charge session timer. b.start / b.stop are ESP millis() values set by the charge
+    // detection (start: current > 32 A, stop: current < 22 A). Both are compared against
+    // the ESP's own millis (ESP.Time.Mls), never the browser clock, so they stay in step.
+    //  - start > stop  -> a charge is running: show how long it has been going.
+    //  - stop >= start -> charge ended: show how long it lasted, for 30 min after it ended.
+    const nowMs = s?.ESP?.Time?.Mls;
+    const startMs = b.start || 0;
+    const stopMs = b.stop || 0;
+    if (nowMs !== undefined && startMs > 0) {
+      if (startMs > stopMs) {
+        lines.push(`Charging for: ${this.formatDuration((nowMs - startMs) / 1000)} ` + this.pl('ONGOING', MyTelem.GREEN));
+      } else if ((nowMs - stopMs) < 30 * 60 * 1000) {
+        lines.push(`Charge lasted: ${this.formatDuration((stopMs - startMs) / 1000)} ` + this.pl(`DONE ${this.formatDuration((nowMs - stopMs) / 1000)} ago`, MyTelem.BLUE));
+      }
+    }
+
     return lines;
   },
 
@@ -1707,7 +1723,7 @@ const MyTelem = {
       if (war.locations && war.locations.length > 4) add('warLocations', war.locations, 'danger');
       
       if (war.hasAct)     add('HasActivityFly', 'ACTIV', 'danger', 'plane', '#FFFFFF');
-      if (war.neptuneActive) add('NeptunLocal', 'NEPTUN', 'danger', 'rocket', '#FFFFFF');
+      if (war.ukrDist > -0.5) add('ukrMapTarhet', `MAP · TARGET ${war.ukrDist.toFixed(1)} KM AWAY`, 'danger', 'rocket', '#FFFFFF');
       if (war.teleActive) add('teleActive', 'TELE LOCAL', 'danger', 'rocket', '#FFFFFF');
       if (war.rapid)      add('HasActivityRapid', 'RAPID', 'danger', 'rocket', '#FFFFFF');
       if (war.ballistic)  add('HasBall', 'BALLISTIC', 'danger', 'rocket', '#FFFFFF');
@@ -1970,7 +1986,7 @@ const CONFIG = {
     overdueMultiplier: 4,
     // Floor for the overdue check so a fast, quiet network (tiny avgRt)
     // doesn't flag every normal request as "overdue" by comparison to itself.
-    overdueMinMs: 800,
+    overdueMinMs: 1500,
     // RSSI thresholds (dBm). -67 or better is a solid, unremarkable signal;
     // below that gets noisier, below -80 is genuinely weak.
     rssiWarnAt: -67,
