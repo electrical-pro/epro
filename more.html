@@ -1325,15 +1325,17 @@ const MyTelem = {
     // detection (start: current > 32 A, stop: current < 22 A). Both are compared against
     // the ESP's own millis (ESP.Time.Mls), never the browser clock, so they stay in step.
     //  - start > stop  -> a charge is running: show how long it has been going.
-    //  - stop >= start -> charge ended: show how long it lasted, for 30 min after it ended.
+    //  - stop >= start -> charge ended: show how long it lasted, for 3 hours after it ended, with SOC at start -> stop.
     const nowMs = s?.ESP?.Time?.Mls;
-    const startMs = b.start || 0;
-    const stopMs = b.stop || 0;
+    const startMs = b.start?.ms || 0;
+    const stopMs = b.stop?.ms || 0;
+    const startSoc = Math.round(b.start?.soc || 0);
+    const stopSoc = Math.round(b.stop?.soc || 0);
     if (nowMs !== undefined && startMs > 0) {
       if (startMs > stopMs) {
         lines.push(`Charging for: ${this.formatDuration((nowMs - startMs) / 1000)} ` + this.pl('ONGOING', MyTelem.GREEN));
       } else if ((nowMs - stopMs) < 3 * 60 * 60 * 1000) {
-        lines.push(`Charge lasted: ${this.formatDuration((stopMs - startMs) / 1000)} ` + this.pl(`DONE · ${this.formatDuration((nowMs - stopMs) / 1000)} ago`, MyTelem.BLUE));
+        lines.push(`Charge lasted: ${this.formatDuration((stopMs - startMs) / 1000)} ` + this.pl(`DONE · (${startSoc} -> ${stopSoc}) · ${this.formatDuration((nowMs - stopMs) / 1000)} ago`, MyTelem.BLUE));
       }
     }
 
