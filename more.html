@@ -1266,6 +1266,27 @@ const MyTelem = {
     return lines;
   },
 
+  // Clock time at which something `hrs` hours from now will happen. Based on the ESP's own
+  // local time string (ESP.Time.Now, e.g. "Wed Nov 4 03:27:18 2026\n"), not the browser clock.
+  // Returns '' when the time isn't available/parsable, so callers can just append it.
+  //  - estimate mode (default, battery ETAs): "(~HH:MM)" only when it lands later today;
+  //    nothing at all once it crosses midnight (or is 24 h+ away).
+  //  - exact mode (exact = true, sun events): plain "(HH:MM)", no "~", no "+1d".
+  etaClock(s, hrs, exact = false) {
+    const mt = /(\d{1,2}):(\d{2}):(\d{2})/.exec(s?.ESP?.Time?.Now ?? '');
+    if (!mt || !Number.isFinite(hrs)) return '';
+    if (!exact && hrs >= 24) return '';
+    const nowSec = (+mt[1]) * 3600 + (+mt[2]) * 60 + (+mt[3]);
+    const target = Math.round((nowSec + hrs * 3600) / 60) * 60;   // round to whole minutes
+    const days = Math.floor(target / 86400);
+    const t = target - days * 86400;
+    const hh = String(Math.floor(t / 3600)).padStart(2, '0');
+    const mm = String(Math.floor((t % 3600) / 60)).padStart(2, '0');
+    if (exact) return `(${hh}:${mm})`;
+    if (days > 0) return '';   // estimate lands on another day: too vague, show nothing
+    return `(~${hh}:${mm})`;
+  },
+
   bmsLines(s) {
     const b = s?.BMS;
     if (!b) return [this.c('NO BMS UPDATE!', MyTelem.RED)];
@@ -1291,12 +1312,12 @@ const MyTelem = {
         const remaining = (100 - b.SOC) * cap / 100;
         const hrs = remaining / b.A_avr;
         const h = Math.floor(hrs), m = Math.round((hrs - h) * 60);
-        lines.push(`Full Charge in: ${h > 0 ? h + ' hours ' : ''}${m} minutes ` + this.pl('CHARGING', MyTelem.GREEN));
+        lines.push(`Full Charge in: ${h > 0 ? h + ' Hrs, ' : ''}${m} Min ${this.etaClock(s, hrs)} ` + this.pl('CHARGING', MyTelem.GREEN));
       } else if (b.A_avr < -0.1) {
         const remaining = b.SOC * cap / 100;
         const hrs = remaining / -b.A_avr;
         const h = Math.floor(hrs), m = Math.round((hrs - h) * 60);
-        lines.push(`Empty in: ${h > 0 ? h + ' hours ' : ''}${m} minutes ` + this.pl('DISCHARGING', MyTelem.YELLOW));
+        lines.push(`Empty in: ${h > 0 ? h + ' Hrs, ' : ''}${m} Min ${this.etaClock(s, hrs)} ` + this.pl('DISCHARGING', MyTelem.YELLOW));
       }
     }
 
@@ -1311,8 +1332,8 @@ const MyTelem = {
     if (nowMs !== undefined && startMs > 0) {
       if (startMs > stopMs) {
         lines.push(`Charging for: ${this.formatDuration((nowMs - startMs) / 1000)} ` + this.pl('ONGOING', MyTelem.GREEN));
-      } else if ((nowMs - stopMs) < 30 * 60 * 1000) {
-        lines.push(`Charge lasted: ${this.formatDuration((stopMs - startMs) / 1000)} ` + this.pl(`DONE ${this.formatDuration((nowMs - stopMs) / 1000)} ago`, MyTelem.BLUE));
+      } else if ((nowMs - stopMs) < 3 * 60 * 60 * 1000) {
+        lines.push(`Charge lasted: ${this.formatDuration((stopMs - startMs) / 1000)} ` + this.pl(`DONE · ${this.formatDuration((nowMs - stopMs) / 1000)} ago`, MyTelem.BLUE));
       }
     }
 
@@ -1609,6 +1630,8 @@ const MyTelem = {
     if (hours > 0) l += `${hours} Hrs, `;
     if (hours > 0 || mins > 0) l += `${mins} Min, `;
     l += `${secs} Sec.`;
+    const clock = this.etaClock(s, totalSec / 3600, true);   // actual time of the event, from ESP local time
+    if (clock) l += ` ${clock}`;
     return [l];
   },
 
