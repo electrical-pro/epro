@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Assistant</title>
+<style>
+:root {
+  --bg: #0e1116; --panel: #161a21; --panel-2: #1c212a; --line: #262d38;
+  --text: #e7eaf0; --muted: #8d97a8; --accent: #5b9dff; --accent-ink: #07111f;
+  --ok: #3ecf8e; --warn: #f5a524; --bad: #ef5350;
+  --radius: 12px; --gap: 14px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+body { display: flex; flex-direction: column; font-size: 15px; line-height: 1.45; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .45; }
+
+/* ---- header ---- */
+header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line);
+         background: var(--panel); flex-wrap: wrap; }
+header h1 { font-size: 17px; margin: 0 6px 0 0; letter-spacing: .2px; }
+.pill { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border-radius: 99px;
+        background: var(--panel-2); border: 1px solid var(--line); font-size: 13px; color: var(--muted); white-space: nowrap; }
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.pill.online .dot { background: var(--ok); }
+.pill.connecting .dot { background: var(--warn); animation: pulse 1s infinite; }
+.pill.offline .dot { background: var(--bad); }
+button.pill:hover { border-color: var(--accent); color: var(--text); }
+#phase { color: var(--text); }
+#phase.idle .dot { background: var(--muted); }
+#phase.loading .dot, #phase.thinking .dot { background: var(--warn); animation: pulse 1s infinite; }
+#phase.wake .dot, #phase.recording .dot { background: var(--bad); animation: pulse .6s infinite; }
+#phase.transcribing .dot { background: var(--accent); animation: pulse .8s infinite; }
+#phase.speaking .dot { background: var(--ok); animation: pulse .8s infinite; }
+#info { color: var(--muted); font-size: 12.5px; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+@keyframes pulse { 50% { opacity: .35; } }
+
+/* ---- layout ---- */
+main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 350px; gap: var(--gap); padding: var(--gap); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+.card h2 { margin: 0 0 10px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+aside { display: flex; flex-direction: column; gap: var(--gap); overflow-y: auto; min-height: 0; padding-bottom: 2px; }
+@media (max-width: 860px) {
+  main { grid-template-columns: 1fr; padding: 10px; }
+  .chat { min-height: 62dvh; }
+  aside { overflow: visible; }
+}
+
+/* ---- chat ---- */
+.chat { display: flex; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; }
+#log { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
+.empty { margin: auto; text-align: center; color: var(--muted); max-width: 30ch; }
+.msg { display: flex; flex-direction: column; max-width: min(78%, 62ch); }
+.msg.user { align-self: flex-end; align-items: flex-end; }
+.msg.assistant { align-self: flex-start; }
+.meta { font-size: 11.5px; color: var(--muted); margin: 0 6px 3px; display: flex; gap: 8px; }
+.meta .src { text-transform: uppercase; letter-spacing: .6px; }
+.bubble { padding: 9px 13px; border-radius: 14px; background: var(--panel-2); border: 1px solid var(--line); overflow-wrap: anywhere; white-space: pre-wrap; }
+.msg.user .bubble { background: var(--accent); color: var(--accent-ink); border-color: transparent; border-bottom-right-radius: 4px; }
+.msg.assistant .bubble { border-bottom-left-radius: 4px; }
+.msg.live .bubble::after { content: ""; display: inline-block; width: 7px; height: 14px; margin-left: 3px; vertical-align: -2px; background: var(--muted); animation: pulse 1s infinite; }
+#status { padding: 0 16px; min-height: 26px; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+#status .bars { display: none; gap: 3px; align-items: center; height: 14px; }
+#status.busy .bars { display: inline-flex; }
+.bars i { width: 3px; height: 100%; background: var(--accent); border-radius: 2px; animation: bar 1s ease-in-out infinite; }
+.bars i:nth-child(2) { animation-delay: .15s; } .bars i:nth-child(3) { animation-delay: .3s; }
+@keyframes bar { 0%, 100% { transform: scaleY(.3); } 50% { transform: scaleY(1); } }
+#note { color: var(--warn); margin-left: auto; }
+form#composer { display: flex; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--line); }
+form#composer input { flex: 1; min-width: 0; padding: 10px 13px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); outline: none; }
+form#composer input:focus { border-color: var(--accent); }
+.btn { padding: 9px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); }
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+
+/* ---- controls ---- */
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 3px; }
+.seg button { border: 0; background: transparent; padding: 8px 6px; border-radius: 8px; color: var(--muted); }
+.seg button.on { background: var(--panel-2); color: var(--text); box-shadow: 0 0 0 1px var(--accent) inset; }
+.seg button:hover:not(:disabled):not(.on) { color: var(--text); }
+.row { display: flex; gap: 8px; align-items: center; }
+.sub { color: var(--muted); font-size: 12.5px; margin-top: 7px; }
+.stack > * + * { margin-top: 10px; }
+#ptt { width: 100%; padding: 16px; font-size: 16px; font-weight: 600; border-radius: 12px; border: 1px solid var(--line); background: var(--panel-2); user-select: none; -webkit-user-select: none; touch-action: none; }
+#ptt.down { background: var(--bad); border-color: transparent; color: #fff; }
+#ptt:hover:not(:disabled):not(.down) { border-color: var(--accent); }
+
+/* ---- devices ---- */
+.dev { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.dev + .dev { margin-top: 8px; }
+.dev.holder { border-color: var(--accent); }
+.dev-main { flex: 1; min-width: 0; }
+.dev-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dev-name .tag { font-weight: 500; font-size: 11px; color: var(--accent); border: 1px solid var(--accent); border-radius: 99px; padding: 0 6px; margin-left: 6px; }
+.dev-name.me { cursor: text; }
+.dev-sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dev-sub.bad { color: var(--bad); } .dev-sub.good { color: var(--ok); }
+.icon { width: 36px; height: 36px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel-2); display: grid; place-items: center; padding: 0; color: var(--muted); }
+.icon svg { width: 19px; height: 19px; fill: currentColor; }
+.icon.on { color: var(--accent-ink); background: var(--accent); border-color: transparent; }
+.icon.ok { color: var(--ok); }
+.icon.off { color: var(--bad); }
+.icon:hover:not(:disabled):not(.on) { border-color: var(--accent); color: var(--text); }
+
+/* ---- sliders / meter ---- */
+.field { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; }
+.field + .field { margin-top: 12px; }
+.field label { color: var(--text); font-size: 13.5px; }
+.field output { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 13px; }
+.field input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
+.field small { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+.meter { position: relative; height: 10px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; }
+.meter i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--muted); transition: width .06s linear; }
+.meter.open i { background: var(--ok); }
+.meter b { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--warn); }
+details > summary { cursor: pointer; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .8px; font-weight: 600; list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸ "; } details[open] > summary::before { content: "▾ "; }
+details[open] > summary { margin-bottom: 10px; }
+
+/* ---- overlays ---- */
+#banner { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 5; display: none; max-width: calc(100% - 24px);
+          background: var(--warn); color: #1b1200; padding: 10px 16px; border-radius: 12px; font-weight: 600; box-shadow: 0 6px 24px #0008; border: 0; }
+#banner.show { display: block; }
+#hint { display: none; padding: 10px 16px; background: #2a1d0b; border-bottom: 1px solid #5a3b0f; color: #f6d9a8; font-size: 13.5px; }
+#hint.show { display: block; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Assistant</h1>
+  <button id="conn" class="pill connecting" title="Change server"><span class="dot"></span><span id="connText">connecting…</span></button>
+  <span id="phase" class="pill loading"><span class="dot"></span><span id="phaseText">Loading…</span></span>
+  <span id="info"></span>
+</header>
+<div id="hint"></div>
+
+<main>
+  <section class="card chat">
+    <div id="log" aria-live="polite"></div>
+    <div id="status"><span class="bars"><i></i><i></i><i></i></span><span id="statusText"></span><span id="note"></span></div>
+    <form id="composer" autocomplete="off">
+      <input id="text" type="text" placeholder="Type a message…" maxlength="500" aria-label="Message">
+      <button class="btn primary" type="submit" id="send">Send</button>
+    </form>
+  </section>
+
+  <aside>
+    <div class="card stack">
+      <h2>Mode</h2>
+      <div class="seg" id="modeSeg">
+        <button data-mode="pc">PC mode</button>
+        <button data-mode="browser">Browser mode</button>
+      </div>
+      <div class="sub" id="modeSub"></div>
+      <div class="seg" id="trigSeg">
+        <button data-trig="wake">Wake word</button>
+        <button data-trig="ptt">Push to talk</button>
+      </div>
+      <button id="ptt" disabled>Hold to talk</button>
+      <div class="row">
+        <button class="btn" id="stop" style="flex:1">Stop speaking</button>
+        <button class="btn" id="clear" style="flex:1">Clear chat</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Devices</h2>
+      <div id="devices"></div>
+      <div class="sub">Mic = who listens. Speaker = who hears the answers; you can switch any device.</div>
+    </div>
+
+    <div class="card" id="micCard" hidden>
+      <h2>This microphone</h2>
+      <div class="meter" id="meter"><i></i><b id="gateMark"></b></div>
+      <div class="sub" id="meterText">—</div>
+      <div class="field" style="margin-top:12px">
+        <label for="gate">Send-sound threshold</label><output id="gateOut"></output>
+        <input id="gate" type="range" min="40" max="3000" step="10">
+        <small>Only sound above this level (plus a moment before and after) is sent to the PC.</small>
+      </div>
+    </div>
+
+    <div class="card">
+      <details>
+        <summary>Recognition settings</summary>
+        <div class="field">
+          <label for="wake">Wake word threshold</label><output id="wakeOut"></output>
+          <input id="wake" type="range" min="0.5" max="0.99" step="0.01">
+          <small>Lower = reacts more easily, but more false wake-ups.</small>
+        </div>
+        <div class="field">
+          <label for="thPc">Speech level, PC mic</label><output id="thPcOut"></output>
+          <input id="thPc" type="range" min="50" max="3000" step="10">
+        </div>
+        <div class="field">
+          <label for="thBr">Speech level, browser mic</label><output id="thBrOut"></output>
+          <input id="thBr" type="range" min="50" max="3000" step="10">
+          <small>Level the command must reach to count as speech (and to end after silence).</small>
+        </div>
+      </details>
+    </div>
+  </aside>
+</main>
+<button id="banner" type="button"></button>
+
+<script>
+(() => {
+"use strict";
+const $ = (s, r = document) => r.querySelector(s);
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// --- tuning knobs ---------------------------------------------------------------------------
+const MIC_CONSTRAINTS = { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+const FRAME = 1280;                 // samples per 80 ms frame at 16 kHz (what the server expects)
+const PREROLL_FRAMES = 6;           // ~0.5 s sent before the sound that opened the gate
+const HANGOVER_FRAMES = 12;         // ~1 s kept open after the sound stops
+
+// --- JSON Merge Patch (RFC 7396) -----------------------------------------------------------
+function merge(target, patch) {
+  if (patch === null || typeof patch !== "object" || Array.isArray(patch)) return patch;
+  const out = (target && typeof target === "object" && !Array.isArray(target)) ? { ...target } : {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === null) delete out[k]; else out[k] = merge(out[k], v);
+  }
+  return out;
+}
+
+// --- which server? ----------------------------------------------------------------------------
+// ?server=192.168.1.20:8198  (remembered)  |  served by the assistant itself: same host  |  ask
+const params = new URLSearchParams(location.search);
+if (params.get("server")) store.set("server", params.get("server"));
+if (params.get("token")) store.set("token", params.get("token"));
+const selfServed = /^https?:$/.test(location.protocol) && !/\.github\.io$/i.test(location.hostname) && !params.get("server");
+function serverTarget() {
+  const s = params.get("server") || store.get("server") || (selfServed ? location.host : "");
+  if (!s) return null;
+  const token = params.get("token") || store.get("token") || "";
+  let url;
+  if (/^wss?:\/\//.test(s)) url = s.replace(/\/+$/, "") + (/\/ws$/.test(s) ? "" : "/ws");
+  else {
+    const scheme = (selfServed && location.protocol === "https:") ? "wss" : "ws";   // a hosted page still uses ws:// to a LAN IP
+    url = `${scheme}://${s}/ws`;
+  }
+  return { url: url + (token ? `?token=${encodeURIComponent(token)}` : ""), label: s.replace(/^wss?:\/\//, "") };
+}
+
+// --- state ------------------------------------------------------------------------------------
+let ws = null, myId = null, state = {}, retry = 1000, retryTimer = null, everOpened = false, fails = 0;
+
+function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
+function sendPatch(p) { send({ t: "patch", p }); }
+
+function guessName() {
+  const ua = navigator.userAgent;
+  const os = /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iOS" : /Windows/.test(ua) ? "Windows"
+           : /Mac/.test(ua) ? "Mac" : /Linux/.test(ua) ? "Linux" : "Device";
+  const br = /Edg\//.test(ua) ? "Edge" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome"
+           : /Safari\//.test(ua) ? "Safari" : "Browser";
+  return `${br} · ${os}`;
+}
+const myName = () => params.get("name") || store.get("name") || guessName();
+
+function setConn(kind, text) {
+  const b = $("#conn");
+  b.className = "pill " + kind;
+  $("#connText").textContent = text;
+}
+
+function connect() {
+  clearTimeout(retryTimer);
+  const target = serverTarget();
+  if (!target) { setConn("offline", "no server"); askServer(); return; }
+  setConn("connecting", "connecting to " + target.label + "…");
+  let sock;
+  try { sock = new WebSocket(target.url); }
+  catch (e) { setConn("offline", "bad address"); showHint("Can't use that address: " + e.message); return; }
+  ws = sock; sock.binaryType = "arraybuffer";
+  let opened = false;
+  sock.onopen = () => { opened = true; everOpened = true; fails = 0; retry = 1000; setConn("online", target.label); showHint(""); };
+  sock.onmessage = onMessage;
+  sock.onclose = () => {
+    if (ws !== sock) return;
+    stopCapture(true);
+    state = {}; myId = null; ws = null;
+    resetChat(); renderAll();
+    setConn("offline", "offline · retrying");
+    if (!opened) {
+      fails++;
+      if (fails >= 2) showHint(`Can't reach <b>${esc(target.label)}</b>. Check the address and that the assistant is running. `
+        + `If this page is hosted online, the browser must allow “local network access” for it (it asks once).`);
+    }
+    retryTimer = setTimeout(connect, retry);
+    retry = Math.min(retry * 1.7, 6000);
+  };
+}
+function showHint(html) { const h = $("#hint"); h.innerHTML = html; h.classList.toggle("show", !!html); }
+function askServer() {
+  const v = prompt("Assistant server (address:port), e.g. 192.168.1.20:8198", store.get("server") || "");
+  if (v && v.trim()) { store.set("server", v.trim()); params.set("server", v.trim()); location.search = "?server=" + encodeURIComponent(v.trim()); }
+}
+$("#conn").onclick = askServer;
+
+function onMessage(ev) {
+  if (typeof ev.data !== "string") { playAudio(ev.data); return; }
+  let m; try { m = JSON.parse(ev.data); } catch { return; }
+  if (m.t === "hello") { myId = m.id; state = {}; sendPatch({ clients: { [myId]: { name: myName() } } }); }
+  else if (m.t === "patch") { state = merge(state, m.p); onState(m.p); }
+  else if (m.t === "chime") chime(m.name);
+  else if (m.t === "stop") stopPlayback();
+}
+
+function onState(p) {
+  if ("chat" in p) renderChat(p.chat);
+  if (Object.keys(p).some(k => k !== "chat")) renderAll();
+  const iHold = myId && state.mic === myId;
+  if (iHold && capState === "idle") startCapture();
+  else if (!iHold && capState !== "idle") stopCapture();
+}
+
+// --- chat ---------------------------------------------------------------------------------------
+const logEl = $("#log"), chatEls = new Map();
+const fmtTime = ts => new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const partsText = m => Object.keys(m.parts || {}).sort((a, b) => a - b).map(k => m.parts[k]).join(" ");
+const SRC = { voice: "voice", text: "typed", rule: "rule", llm: "AI" };
+
+function resetChat() { chatEls.clear(); logEl.innerHTML = ""; }
+function renderChat(changed) {
+  const nearBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 140;
+  for (const [id, v] of Object.entries(changed || {})) {
+    let el = chatEls.get(id);
+    if (v === null) { el?.remove(); chatEls.delete(id); continue; }
+    const m = state.chat?.[id]; if (!m) continue;
+    if (!el) {
+      el = document.createElement("div");
+      el.innerHTML = '<div class="meta"><span class="who"></span><span class="src"></span><time></time></div><div class="bubble"></div>';
+      logEl.appendChild(el); chatEls.set(id, el);
+      $(".who", el).textContent = m.role === "user" ? "You" : "Assistant";
+      $(".src", el).textContent = SRC[m.src] || m.src || "";
+      $("time", el).textContent = fmtTime(m.ts);
+    }
+    el.className = "msg " + m.role + (m.done ? "" : " live");
+    $(".bubble", el).textContent = partsText(m);
+  }
+  const empty = logEl.querySelector(".empty");
+  if (chatEls.size === 0 && !empty) logEl.insertAdjacentHTML("afterbegin", '<div class="empty">No conversation yet. Say the wake word or type a message below.</div>');
+  else if (chatEls.size > 0 && empty) empty.remove();
+  if (nearBottom) logEl.scrollTop = logEl.scrollHeight;
+}
+
+// --- rendering controls -------------------------------------------------------------------------
+const ICON = {
+  mic: '<svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-2z"/></svg>',
+  spk: '<svg viewBox="0 0 24 24"><path d="M3 10v4h4l5 4V6L7 10H3zm13.5 2a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg>',
+  spkOff: '<svg viewBox="0 0 24 24"><path d="M3 10v4h4l5 4V6L7 10H3z"/><path d="M15.4 9.3l1.4-1.4 2.2 2.2 2.2-2.2 1.4 1.4-2.2 2.2 2.2 2.2-1.4 1.4-2.2-2.2-2.2 2.2-1.4-1.4 2.2-2.2z"/></svg>',
+};
+const PHASE = {
+  loading: ["Loading models…", "Starting up — loading the speech models"],
+  idle: ["Idle", ""], wake: ["Listening…", "Listening for your command…"],
+  recording: ["Hearing you", "Hearing you…"], transcribing: ["Recognizing", "Recognizing speech…"],
+  thinking: ["Thinking", "Thinking…"], speaking: ["Speaking", "Speaking…"],
+};
+const MIC_MSG = {
+  starting: ["starting microphone…", ""], ok: ["listening", "good"], needs_tap: ["tap the page to start the microphone", "bad"],
+  denied: ["microphone permission denied", "bad"], insecure: ["browser blocks the mic here: needs https or localhost", "bad"],
+  error: ["microphone error", "bad"],
+};
+
+function holderName() { return state.clients?.[state.mic]?.name || "—"; }
+
+function renderAll() {
+  const connected = !!myId;
+  // header
+  const ph = state.phase || "loading";
+  $("#phase").className = "pill " + ph;
+  $("#phaseText").textContent = connected ? PHASE[ph]?.[0] || ph : "—";
+  const info = state.info || {};
+  $("#info").textContent = [info.llm, info.stt && "STT " + info.stt, info.wake && "wake “" + info.wake + "”"].filter(Boolean).join("  ·  ");
+  // status line in chat
+  const st = $("#status");
+  const busy = connected && !["idle", "loading"].includes(ph);
+  st.classList.toggle("busy", busy);
+  let line = PHASE[ph]?.[1] || "";
+  if (ph === "idle" && connected) line = state.trigger === "ptt" ? "Ready. Hold the talk button to speak." : "Ready. Say the wake word, or hold the talk button.";
+  $("#statusText").textContent = connected ? line : "Not connected";
+  $("#note").textContent = state.note || "";
+
+  // mode
+  const pcMode = state.mic === "pc", iHold = state.mic === myId;
+  $("#modeSeg").querySelectorAll("button").forEach(b => {
+    b.classList.toggle("on", connected && (b.dataset.mode === "pc") === pcMode);
+    b.disabled = !connected;
+  });
+  $('[data-mode="browser"]').textContent = (!pcMode && !iHold) ? "Take mic here" : "Browser mode";
+  $("#modeSub").textContent = !connected ? "" : pcMode ? "The PC listens and speaks. Pages only watch."
+    : iHold ? "This browser listens. Speakers can be switched per device below." : `“${holderName()}” listens. Press the button to take over.`;
+  $("#trigSeg").querySelectorAll("button").forEach(b => { b.classList.toggle("on", b.dataset.trig === state.trigger); b.disabled = !connected; });
+  updatePttButton();
+
+  // devices
+  const clients = state.clients || {};
+  const ids = Object.keys(clients).sort((a, b) => (a === "pc" ? -1 : b === "pc" ? 1 : a.localeCompare(b, undefined, { numeric: true })));
+  $("#devices").innerHTML = ids.map(id => {
+    const c = clients[id], me = id === myId, holder = id === state.mic;
+    let sub = c.kind === "pc" ? "This server" : c.addr || "";
+    let cls = "";
+    if (holder) { const ms = c.mic_status || (c.kind === "pc" ? "ok" : "starting"); const [t, k] = MIC_MSG[ms] || [ms, ""]; sub = t; cls = k; }
+    return `<div class="dev ${holder ? "holder" : ""}" data-id="${esc(id)}">
+      <div class="dev-main"><div class="dev-name ${me ? "me" : ""}" ${me ? 'title="Click to rename"' : ""}>${esc(c.name)}${me ? '<span class="tag">you</span>' : ""}</div>
+        <div class="dev-sub ${cls}">${esc(sub)}</div></div>
+      <button class="icon ${holder ? "on" : ""}" data-act="mic" title="${holder ? "Has the microphone" : "Give the microphone to this device"}" ${holder ? "disabled" : ""}>${ICON.mic}</button>
+      <button class="icon ${c.muted ? "off" : "ok"}" data-act="mute" title="${c.muted ? "Speaker off, click to turn on" : "Speaker on, click to turn off"}">${c.muted ? ICON.spkOff : ICON.spk}</button>
+    </div>`;
+  }).join("");
+
+  // sliders (don't fight the user's finger)
+  const s = state.settings || {};
+  setSlider("#wake", "#wakeOut", s.wake_thresh, v => Number(v).toFixed(2));
+  setSlider("#thPc", "#thPcOut", s.thresh_pc, v => v);
+  setSlider("#thBr", "#thBrOut", s.thresh_browser, v => v);
+  $("#micCard").hidden = !(connected && iHold);
+  $("#gate").value = gateThresh; $("#gateOut").textContent = gateThresh;
+  updateBanner();
+}
+function setSlider(sel, outSel, val, fmt) {
+  const el = $(sel);
+  if (val === undefined) return;
+  if (document.activeElement !== el) el.value = val;
+  $(outSel).textContent = fmt(el.value);
+}
+
+// --- controls -------------------------------------------------------------------------------------
+$("#modeSeg").onclick = e => {
+  const b = e.target.closest("button"); if (!b || !myId) return;
+  unlockAudio();
+  sendPatch({ mic: b.dataset.mode === "pc" ? "pc" : myId });
+};
+$("#trigSeg").onclick = e => { const b = e.target.closest("button"); if (b) sendPatch({ trigger: b.dataset.trig }); };
+$("#devices").onclick = e => {
+  const name = e.target.closest(".dev-name.me");
+  if (name) { const v = prompt("Name of this device", myName()); if (v && v.trim()) { store.set("name", v.trim()); sendPatch({ clients: { [myId]: { name: v.trim() } } }); } return; }
+  const btn = e.target.closest("button[data-act]"); if (!btn) return;
+  const id = btn.closest(".dev").dataset.id;
+  unlockAudio();
+  if (btn.dataset.act === "mic") sendPatch({ mic: id });
+  else sendPatch({ clients: { [id]: { muted: !state.clients[id].muted } } });
+};
+$("#stop").onclick = () => send({ t: "stop" });
+$("#clear").onclick = () => send({ t: "clear" });
+$("#composer").onsubmit = e => {
+  e.preventDefault();
+  const el = $("#text"), t = el.value.trim();
+  if (t && myId) { send({ t: "say", text: t }); el.value = ""; }
+};
+let sliderTimer;
+function sliderSend(sel, key) {
+  $(sel).addEventListener("input", e => {
+    const out = $(sel + "Out"); if (out) out.textContent = key === "wake_thresh" ? Number(e.target.value).toFixed(2) : e.target.value;
+    clearTimeout(sliderTimer);
+    sliderTimer = setTimeout(() => sendPatch({ settings: { [key]: Number(e.target.value) } }), 150);
+  });
+}
+sliderSend("#wake", "wake_thresh"); sliderSend("#thPc", "thresh_pc"); sliderSend("#thBr", "thresh_browser");
+
+let gateThresh = Number(store.get("gate")) || 350;
+$("#gate").addEventListener("input", e => { gateThresh = Number(e.target.value); store.set("gate", gateThresh); $("#gateOut").textContent = gateThresh; drawMeter(); });
+
+// --- push to talk ---------------------------------------------------------------------------------
+let pttHeld = false, pttPressed = false, pttTimer = null;
+function canPtt() {
+  if (!myId || state.phase === "loading") return false;
+  if (state.mic === "pc") return true;
+  return state.mic === myId && capState === "on";
+}
+function updatePttButton() {
+  const b = $("#ptt");
+  const can = canPtt();
+  b.disabled = !can && !pttPressed;
+  b.classList.toggle("down", pttHeld);
+  b.textContent = pttHeld ? "Listening… release to send"
+    : !myId ? "Not connected" : state.mic !== "pc" && state.mic !== myId ? `Mic is on “${holderName()}”`
+    : can ? "Hold to talk (or hold Space)" : "Microphone not ready";
+}
+function pttDown() {
+  if (!canPtt()) return;
+  unlockAudio();
+  pttPressed = true;
+  if (pttTimer) { clearTimeout(pttTimer); pttTimer = null; return; }
+  if (pttHeld) return;
+  pttHeld = true; send({ t: "ptt", on: true }); updatePttButton();
+}
+function pttUp() {
+  if (!pttPressed) return;
+  pttPressed = false;
+  // keep sending for a moment: the last frames are still on their way from the mic
+  pttTimer = setTimeout(() => { pttTimer = null; pttHeld = false; send({ t: "ptt", on: false }); updatePttButton(); }, 300);
+}
+const pttBtn = $("#ptt");
+pttBtn.addEventListener("pointerdown", e => { e.preventDefault(); pttBtn.setPointerCapture(e.pointerId); pttDown(); });
+pttBtn.addEventListener("pointerup", pttUp);
+pttBtn.addEventListener("pointercancel", pttUp);
+pttBtn.addEventListener("contextmenu", e => e.preventDefault());
+addEventListener("keydown", e => { if (e.code === "Space" && !e.repeat && !/INPUT|TEXTAREA|BUTTON/.test(document.activeElement?.tagName || "")) { e.preventDefault(); pttDown(); } });
+addEventListener("keyup", e => { if (e.code === "Space") pttUp(); });
+addEventListener("blur", pttUp);
+
+// --- microphone capture -> server ----------------------------------------------------------------
+const WORKLET = `
+class Cap extends AudioWorkletProcessor {
+  constructor() { super(); this.ratio = sampleRate / 16000; this.phase = 0; this.acc = 0; this.cnt = 0; this.buf = new Int16Array(${FRAME}); this.n = 0; }
+  process(inputs) {
+    const ch = inputs[0] && inputs[0][0];
+    if (!ch) return true;
+    for (let i = 0; i < ch.length; i++) {
+      this.acc += ch[i]; this.cnt++; this.phase += 1;
+      if (this.phase >= this.ratio) {            // box-filter downsample to 16 kHz
+        this.phase -= this.ratio;
+        let v = this.acc / this.cnt; this.acc = 0; this.cnt = 0;
+        v = Math.max(-1, Math.min(1, v));
+        this.buf[this.n++] = v < 0 ? v * 32768 : v * 32767;
+        if (this.n === ${FRAME}) { const b = this.buf.slice().buffer; this.port.postMessage(b, [b]); this.n = 0; }
+      }
+    }
+    return true;
+  }
+}
+registerProcessor("cap", Cap);`;
+
+let capState = "idle";            // idle | starting | on | failed
+let micStream = null, micCtx = null, micNode = null;
+let frameNo = 0, ring = [], hang = 0, gateOpen = false, lastLevel = 0, sentCount = 0;
+let micStatusSent;
+
+function setMicStatus(s) {
+  if (!myId || micStatusSent === s) return;
+  micStatusSent = s;
+  sendPatch({ clients: { [myId]: { mic_status: s } } });
+}
+
+async function startCapture() {
+  if (capState !== "idle") return;
+  capState = "starting"; micStatusSent = undefined;
+  setMicStatus("starting"); updatePttButton();
+  const fail = (status, err) => { if (err) console.warn("mic:", err); stopCapture(true); capState = "failed"; setMicStatus(status); updatePttButton(); renderAll(); };
+  if (!navigator.mediaDevices?.getUserMedia) return fail("insecure");
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: MIC_CONSTRAINTS });
+  } catch (e) { return fail(e.name === "NotAllowedError" || e.name === "SecurityError" ? "denied" : "error", e); }
+  if (capState !== "starting") { micStream.getTracks().forEach(t => t.stop()); return; }     // mic was handed on meanwhile
+  try {
+    micCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "interactive" });
+    const url = URL.createObjectURL(new Blob([WORKLET], { type: "application/javascript" }));
+    await micCtx.audioWorklet.addModule(url); URL.revokeObjectURL(url);
+    const src = micCtx.createMediaStreamSource(micStream);
+    micNode = new AudioWorkletNode(micCtx, "cap");
+    const mute = micCtx.createGain(); mute.gain.value = 0;               // keep the graph pulled, make no sound
+    src.connect(micNode); micNode.connect(mute); mute.connect(micCtx.destination);
+    micNode.port.onmessage = e => onFrame(new Int16Array(e.data));
+    micStream.getAudioTracks()[0].onended = () => fail("error", "track ended");
+  } catch (e) { return fail("error", e); }
+  frameNo = 0; ring = []; hang = 0; gateOpen = false; sentCount = 0;
+  try { await micCtx.resume(); } catch {}
+  micCtx.onstatechange = () => { if (capState === "on" || capState === "starting") checkMicRunning(); };
+  capState = "on";
+  checkMicRunning(); updatePttButton(); renderAll();
+}
+function checkMicRunning() {
+  if (!micCtx) return;
+  if (micCtx.state === "running") setMicStatus("ok"); else setMicStatus("needs_tap");
+  updateBanner();
+}
+function stopCapture(quiet) {
+  const was = capState;
+  capState = "idle";
+  micNode && (micNode.port.onmessage = null, micNode.disconnect());
+  micStream && micStream.getTracks().forEach(t => t.stop());
+  micCtx && micCtx.close().catch(() => {});
+  micNode = micStream = micCtx = null;
+  ring = []; gateOpen = false; lastLevel = 0;
+  if (was !== "idle" && !quiet) setMicStatus(null);
+  micStatusSent = undefined;
+  pttPressed = false; if (pttTimer) { clearTimeout(pttTimer); pttTimer = null; } pttHeld = false;
+  drawMeter(); updatePttButton(); updateBanner();
+}
+
+function onFrame(pcm) {
+  let sum = 0;
+  for (let i = 0; i < pcm.length; i++) sum += Math.abs(pcm[i]);
+  const level = sum / pcm.length;
+  const counter = frameNo++;
+  lastLevel = level;
+  const loud = level >= gateThresh;
+  if (loud) hang = HANGOVER_FRAMES; else if (hang > 0) hang--;
+  // open while: push-to-talk is held, the server is recording a command, or there is (recent) sound
+  const serverBusy = state.phase === "wake" || state.phase === "recording";
+  const want = pttHeld || serverBusy || (state.trigger === "wake" && (loud || hang > 0));
+  if (want) {
+    if (!gateOpen) { for (const f of ring) sendFrame(f.c, f.d); ring = []; }
+    sendFrame(counter, pcm);
+  } else {
+    ring.push({ c: counter, d: pcm });
+    if (ring.length > PREROLL_FRAMES) ring.shift();
+  }
+  gateOpen = want;
+  if (counter % 2 === 0) drawMeter();
+}
+function sendFrame(counter, pcm) {
+  if (!ws || ws.readyState !== 1 || ws.bufferedAmount > 1e6) return;
+  const b = new ArrayBuffer(4 + pcm.byteLength);
+  new DataView(b).setUint32(0, counter, true);
+  new Int16Array(b, 4).set(pcm);
+  ws.send(b); sentCount++;
+}
+function drawMeter() {
+  const m = $("#meter"); if (!m) return;
+  const full = 3000;
+  $("i", m).style.width = Math.min(100, lastLevel / full * 100) + "%";
+  $("#gateMark").style.left = Math.min(100, gateThresh / full * 100) + "%";
+  m.classList.toggle("open", gateOpen);
+  $("#meterText").textContent = capState !== "on" ? "Microphone not running"
+    : gateOpen ? "Sending to the PC" : "Quiet: nothing is sent";
+}
+
+// --- sound out: answers and chimes ------------------------------------------------------------
+let pctx = null, nextT = 0;
+const playing = new Set();
+function audioCtx() { if (!pctx) { pctx = new (window.AudioContext || window.webkitAudioContext)(); pctx.onstatechange = updateBanner; } return pctx; }
+async function unlockAudio() { try { const c = audioCtx(); if (c.state !== "running") await c.resume(); } catch {} updateBanner(); }
+addEventListener("pointerdown", unlockAudio, true);
+addEventListener("keydown", unlockAudio, true);
+
+function playAudio(buf) {
+  if (buf.byteLength < 10) return;
+  const dv = new DataView(buf);
+  if (dv.getUint8(0) !== 1) return;
+  const sr = dv.getUint32(4, true);
+  const i16 = new Int16Array(buf, 8, (buf.byteLength - 8) >> 1);
+  const f = new Float32Array(i16.length);
+  for (let i = 0; i < f.length; i++) f[i] = i16[i] / 32768;
+  const c = audioCtx();
+  const ab = c.createBuffer(1, f.length, sr); ab.copyToChannel(f, 0);
+  const s = c.createBufferSource(); s.buffer = ab; s.connect(c.destination);
+  const t = Math.max(c.currentTime + 0.04, nextT);
+  s.start(t); nextT = t + ab.duration;
+  playing.add(s); s.onended = () => playing.delete(s);
+}
+function stopPlayback() { for (const s of playing) { try { s.stop(); } catch {} } playing.clear(); nextT = 0; }
+function chime(name) {            // same two-note bells as the PC chimes
+  const c = audioCtx();
+  const notes = name === "wake" ? [[659.25, 0, .28], [987.77, .09, .32]] : [[783.99, 0, .18], [587.33, .07, .24]];
+  const sr = c.sampleRate, total = Math.max(...notes.map(n => n[1] + n[2]));
+  const data = new Float32Array(Math.ceil(sr * total) + 1);
+  for (const [freq, start, dur] of notes) {
+    const off = Math.floor(sr * start), n = Math.floor(sr * dur);
+    for (let i = 0; i < n && off + i < data.length; i++) {
+      const t = i / sr, env = Math.min(1, t / 0.004) * Math.exp(-t * 9), w = 2 * Math.PI * freq * t;
+      data[off + i] += (0.35 / 1.55) * env * (Math.sin(w) + 0.4 * Math.sin(2 * w) + 0.15 * Math.sin(3 * w));
+    }
+  }
+  const ab = c.createBuffer(1, data.length, sr); ab.copyToChannel(data, 0);
+  const s = c.createBufferSource(); s.buffer = ab; s.connect(c.destination); s.start();
+}
+
+// --- "tap" banner: browsers need a tap before they allow sound or the mic -----------------------
+function updateBanner() {
+  const b = $("#banner");
+  const me = state.clients?.[myId];
+  let text = "";
+  if (me && micCtx && micCtx.state !== "running" && state.mic === myId) text = "Tap here to start the microphone";
+  else if (me && !me.muted && (!pctx || pctx.state !== "running")) text = "Tap here to turn the sound on";
+  b.textContent = text; b.classList.toggle("show", !!text);
+}
+$("#banner").onclick = async () => { await unlockAudio(); if (micCtx) { try { await micCtx.resume(); } catch {} checkMicRunning(); } };
+addEventListener("pointerdown", () => { if (micCtx && micCtx.state !== "running") micCtx.resume().then(checkMicRunning).catch(() => {}); }, true);
+document.addEventListener("visibilitychange", () => { if (document.hidden) pttUp(); });
+
+// --- go -------------------------------------------------------------------------------------------
+renderChat({});
+renderAll();
+connect();
+})();
+</script>
+</body>
+</html>
