@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WS Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #000000;
+    --surface: #131313;
+    --surface-2: #262626;
+    --surface-3: #2f2f2f;
+    --outline: #3a3a3a;
+    --on-surface: #e6e6e6;
+    --on-surface-var: #a3a3a3;
+    --primary: #4dabf7;
+    --primary-dim: #1c5e8c;
+    --success: #4cd97b;
+    --warn: #ffb648;
+    --error: #ff6b6b;
+    --radius: 12px;
+    --elev1: 0 1px 2px rgba(0,0,0,.4), 0 1px 3px 1px rgba(0,0,0,.25);
+    --elev2: 0 1px 2px rgba(0,0,0,.5), 0 2px 6px 2px rgba(0,0,0,.3);
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--on-surface);
+    font-family:'Roboto', sans-serif;
+    display:flex;
+    flex-direction:column;
+    height:100vh;
+    overflow:hidden;
+  }
+
+  .appbar{
+    background:var(--surface);
+    box-shadow:var(--elev1);
+    padding:14px 20px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    flex-wrap:wrap;
+    z-index:5;
+  }
+  .appbar-left{
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+  .appbar-left svg{flex-shrink:0;}
+  .appbar-title{
+    font-size:18px;
+    font-weight:500;
+    letter-spacing:.1px;
+  }
+  .appbar-sub{
+    font-size:12px;
+    color:var(--on-surface-var);
+    font-family:'Roboto Mono', monospace;
+  }
+
+  .chip{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    padding:6px 12px 6px 10px;
+    border-radius:20px;
+    background:var(--surface-2);
+    font-size:12.5px;
+    font-weight:500;
+    color:var(--on-surface-var);
+    transition:background .2s ease, color .2s ease;
+  }
+  .chip .dot{
+    width:8px;height:8px;border-radius:50%;
+    background:var(--on-surface-var);
+  }
+  .chip.connected{background:rgba(76,217,123,.14); color:var(--success);}
+  .chip.connected .dot{background:var(--success); box-shadow:0 0 6px var(--success);}
+  .chip.connecting{background:rgba(255,182,72,.14); color:var(--warn);}
+  .chip.connecting .dot{background:var(--warn); animation:pulse 1s infinite;}
+  .chip.error{background:rgba(255,107,107,.14); color:var(--error);}
+  .chip.error .dot{background:var(--error);}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+  .toolbar-controls{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+
+  .field{
+    position:relative;
+  }
+  .field input{
+    background:var(--surface-2);
+    border:1px solid var(--outline);
+    color:var(--on-surface);
+    font-family:'Roboto Mono', monospace;
+    font-size:12.5px;
+    padding:9px 12px;
+    border-radius:8px;
+    width:230px;
+    transition:border-color .15s ease, box-shadow .15s ease;
+  }
+  .field input:focus{
+    outline:none;
+    border-color:var(--primary);
+    box-shadow:0 0 0 3px rgba(77,171,247,.15);
+  }
+
+  button{
+    font-family:'Roboto', sans-serif;
+    font-size:13px;
+    font-weight:500;
+    letter-spacing:.2px;
+    border:none;
+    border-radius:8px;
+    padding:9px 18px;
+    cursor:pointer;
+    position:relative;
+    overflow:hidden;
+    transition:background .15s ease, box-shadow .15s ease, transform .05s ease;
+  }
+  button:active{transform:scale(.97);}
+  button.filled{
+    background:var(--primary);
+    color:#062338;
+    box-shadow:var(--elev1);
+  }
+  button.filled:hover{box-shadow:var(--elev2); background:#63b8f8;}
+  button.filled.stop{
+    background:var(--error);
+    color:#3a0303;
+  }
+  button.filled.stop:hover{background:#ff8a8a;}
+  button.tonal{
+    background:var(--surface-2);
+    color:var(--on-surface);
+    border:1px solid var(--outline);
+  }
+  button.tonal:hover{background:var(--surface-3);}
+  button.icon-btn{
+    background:transparent;
+    border-radius:50%;
+    width:38px; height:38px;
+    padding:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:var(--on-surface-var);
+  }
+  button.icon-btn:hover{background:var(--surface-2); color:var(--on-surface);}
+  button:disabled{opacity:.45; cursor:not-allowed;}
+
+  main{
+    flex:1;
+    overflow:hidden;
+    padding:16px 20px;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+
+  .card{
+    background:var(--surface);
+    border-radius:var(--radius);
+    box-shadow:var(--elev1);
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    min-height:0;
+  }
+
+  .card-header{
+    padding:12px 18px;
+    border-bottom:1px solid var(--outline);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .card-header .label{
+    font-size:12px;
+    font-weight:500;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--on-surface-var);
+  }
+  .card-header .stats{
+    font-size:12px;
+    color:var(--on-surface-var);
+    font-family:'Roboto Mono', monospace;
+    display:flex;
+    align-items:center;
+    gap:14px;
+    flex-wrap:wrap;
+  }
+  .last-size{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    padding:3px 10px;
+    border-radius:20px;
+    background:var(--surface-2);
+    color:var(--primary);
+    font-weight:500;
+    transition:background .15s ease;
+  }
+  .last-size.flash{background:rgba(77,171,247,.22);}
+  .last-size.rt-chip{color:#c199ff;}
+  .last-size.rt-chip.flash{background:rgba(190,140,255,.22);}
+
+  .interval-panel{
+    background:var(--surface);
+    border-radius:var(--radius);
+    box-shadow:var(--elev1);
+    padding:12px 16px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .interval-panel .ip-label{
+    font-size:12px;
+    font-weight:500;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--on-surface-var);
+    flex-shrink:0;
+  }
+  .interval-panel input[type="text"]{
+    background:var(--surface-2);
+    border:1px solid var(--outline);
+    color:var(--on-surface);
+    font-family:'Roboto Mono', monospace;
+    font-size:12.5px;
+    padding:8px 12px;
+    border-radius:8px;
+    width:160px;
+  }
+  .interval-panel input[type="number"]{
+    background:var(--surface-2);
+    border:1px solid var(--outline);
+    color:var(--on-surface);
+    font-family:'Roboto Mono', monospace;
+    font-size:12.5px;
+    padding:8px 10px;
+    border-radius:8px;
+    width:80px;
+  }
+  .interval-panel input:focus{
+    outline:none;
+    border-color:var(--primary);
+    box-shadow:0 0 0 3px rgba(77,171,247,.15);
+  }
+  .interval-panel .ip-unit{
+    font-size:12px;
+    color:var(--on-surface-var);
+  }
+  .ip-checkbox{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    font-size:12.5px;
+    color:var(--on-surface-var);
+    cursor:pointer;
+    user-select:none;
+  }
+  .ip-checkbox input[type="checkbox"]{
+    width:16px; height:16px;
+    accent-color:var(--primary);
+    cursor:pointer;
+  }
+  .interval-chip{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:12px;
+    color:var(--on-surface-var);
+    margin-left:auto;
+  }
+  .interval-chip .dot{
+    width:7px; height:7px; border-radius:50%;
+    background:var(--outline);
+  }
+  .interval-chip.running .dot{
+    background:var(--success);
+    box-shadow:0 0 6px var(--success);
+    animation:pulse 1s infinite;
+  }
+  .interval-chip.running{color:var(--success);}
+
+  /* ----- unified average panel ----- */
+  .avg-panel{
+    background:var(--surface);
+    border-radius:var(--radius);
+    box-shadow:var(--elev1);
+    padding:10px 16px;
+    display:flex;
+    align-items:center;
+    gap:14px;
+    flex-wrap:wrap;
+  }
+  .avg-panel .ap-label{
+    font-size:12px;
+    font-weight:500;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--on-surface-var);
+    flex-shrink:0;
+  }
+  .avg-panel .ap-group{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    flex-wrap:wrap;
+  }
+  .avg-panel input[type="number"]{
+    background:var(--surface-2);
+    border:1px solid var(--outline);
+    color:var(--on-surface);
+    font-family:'Roboto Mono', monospace;
+    font-size:12.5px;
+    padding:6px 8px;
+    border-radius:8px;
+    width:60px;
+  }
+  .avg-panel input:focus{
+    outline:none;
+    border-color:var(--primary);
+    box-shadow:0 0 0 3px rgba(77,171,247,.15);
+  }
+  .avg-panel .ap-unit{
+    font-size:12px;
+    color:var(--on-surface-var);
+    margin-right:4px;
+  }
+  .ap-pill{
+    display:flex;
+    align-items:center;
+    gap:5px;
+    padding:4px 12px;
+    border-radius:20px;
+    background:var(--surface-2);
+    font-size:12.5px;
+    font-family:'Roboto Mono', monospace;
+    color:var(--on-surface-var);
+  }
+  .ap-pill .ap-label-text{
+    font-family:'Roboto', sans-serif;
+    color:var(--on-surface-var);
+    opacity:.8;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+  }
+  .ap-pill.tx-speed{color:var(--success);}
+  .ap-pill.rx-speed{color:var(--primary);}
+  .ap-pill.size-pill{color:var(--primary);}
+  .ap-pill.rt-pill{color:#c199ff;}
+  .ap-pill .ap-val{
+    font-weight:500;
+    min-width:50px;
+    display:inline-block;
+    text-align:right;
+  }
+  .ap-pill .ap-unit-sm{
+    font-size:11px;
+    opacity:.7;
+    font-weight:400;
+  }
+
+  #log{
+    flex:1;
+    overflow-y:auto;
+    padding:14px 18px;
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+    font-family:'Roboto Mono', monospace;
+    font-size:13px;
+    min-height:0;
+  }
+  #log::-webkit-scrollbar{width:10px;}
+  #log::-webkit-scrollbar-thumb{background:var(--outline); border-radius:5px;}
+  #log::-webkit-scrollbar-track{background:transparent;}
+
+  .row{
+    display:flex;
+    gap:10px;
+    padding:6px 10px;
+    border-radius:8px;
+    align-items:flex-start;
+    animation:slidein .18s ease;
+  }
+  @keyframes slidein{from{opacity:0; transform:translateY(3px);} to{opacity:1; transform:none;}}
+  .row.rx{background:rgba(77,171,247,.06);}
+  .row.tx{background:rgba(76,217,123,.06);}
+  .row.sys{opacity:.75;}
+  .row.err{background:rgba(255,107,107,.08);}
+
+  .ts-wrap{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    flex-shrink:0;
+    padding-top:1px;
+  }
+  .ts{color:var(--on-surface-var); font-size:11.5px; line-height:1.3;}
+  .sz{color:var(--on-surface-var); font-size:10px; opacity:.65; line-height:1.3; font-variant-numeric:tabular-nums;}
+  .rt{color:#c199ff; font-size:10px; opacity:.85; line-height:1.3; font-variant-numeric:tabular-nums; font-weight:500;}
+  .badge{
+    flex-shrink:0;
+    font-size:10.5px;
+    font-weight:700;
+    letter-spacing:.05em;
+    padding:2px 7px;
+    border-radius:4px;
+    height:fit-content;
+  }
+  .badge.rx{background:rgba(77,171,247,.18); color:var(--primary);}
+  .badge.tx{background:rgba(76,217,123,.18); color:var(--success);}
+  .badge.sys{background:rgba(255,182,72,.18); color:var(--warn);}
+  .badge.err{background:rgba(255,107,107,.18); color:var(--error);}
+  .badge.bin{background:rgba(190,140,255,.18); color:#c199ff;}
+  .msg{white-space:pre-wrap; word-break:break-word; line-height:1.5;}
+  .msg.sys{color:var(--on-surface-var); font-style:italic;}
+
+  .composer{
+    background:var(--surface);
+    border-radius:var(--radius);
+    box-shadow:var(--elev1);
+    padding:10px 12px;
+    display:flex;
+    align-items:flex-end;
+    gap:10px;
+  }
+  #msgInput{
+    flex:1;
+    background:var(--surface-2);
+    border:1px solid var(--outline);
+    color:var(--on-surface);
+    font-family:'Roboto Mono', monospace;
+    font-size:13.5px;
+    padding:12px 14px;
+    border-radius:10px;
+    resize:none;
+    max-height:140px;
+  }
+  #msgInput:focus{
+    outline:none;
+    border-color:var(--primary);
+    box-shadow:0 0 0 3px rgba(77,171,247,.15);
+  }
+  #msgInput::placeholder{color:var(--on-surface-var);}
+
+  .fab{
+    width:44px; height:44px;
+    border-radius:50%;
+    background:var(--primary);
+    color:#062338;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-shrink:0;
+    box-shadow:var(--elev2);
+    padding:0;
+  }
+  .fab:hover{background:#63b8f8;}
+  .fab:disabled{opacity:.4;}
+
+  #toastWrap{
+    position:fixed;
+    bottom:22px;
+    left:50%;
+    transform:translateX(-50%);
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    z-index:50;
+    align-items:center;
+  }
+  .toast{
+    background:#323232;
+    color:#fff;
+    padding:12px 18px;
+    border-radius:8px;
+    font-size:13px;
+    box-shadow:var(--elev2);
+    display:flex;
+    align-items:center;
+    gap:14px;
+    animation:toastin .2s ease;
+    min-width:260px;
+  }
+  .toast.error{border-left:4px solid var(--error);}
+  .toast.info{border-left:4px solid var(--primary);}
+  @keyframes toastin{from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:none;}}
+  .toast.fadeout{animation:toastout .25s ease forwards;}
+  @keyframes toastout{to{opacity:0; transform:translateY(8px);}}
+
+  footer{
+    padding:4px 20px 14px;
+    font-size:11px;
+    color:var(--on-surface-var);
+    text-align:right;
+  }
+
+  @media (max-width: 700px){
+    .appbar{flex-direction:column; align-items:stretch;}
+    .appbar-left{justify-content:center;}
+    .toolbar-controls{flex-wrap:wrap; justify-content:center;}
+    .field input{width:100%;}
+    .interval-panel{flex-direction:column; align-items:stretch;}
+    .interval-panel .ip-checkbox{align-self:flex-start;}
+    .interval-chip{margin-left:0;}
+    .avg-panel{flex-direction:column; align-items:stretch;}
+    .avg-panel .ap-label{align-self:flex-start;}
+    .avg-panel .ap-group{justify-content:flex-start;}
+    .card-header{flex-direction:column; align-items:stretch;}
+    .card-header .stats{justify-content:flex-start;}
+  }
+</style>
+</head>
+<body>
+
+<div class="appbar">
+  <div class="appbar-left">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+      <path d="M12 20a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" fill="#4dabf7"/>
+      <path d="M8.5 14.5a5 5 0 0 1 7 0" stroke="#4dabf7" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M5.5 11.5a9 9 0 0 1 13 0" stroke="#4dabf7" stroke-width="1.8" stroke-linecap="round" opacity=".6"/>
+      <path d="M2.5 8.5a13 13 0 0 1 19 0" stroke="#4dabf7" stroke-width="1.8" stroke-linecap="round" opacity=".3"/>
+    </svg>
+    <div>
+      <div class="appbar-title">WS Console</div>
+      <div class="appbar-sub" id="urlLabel">ws://192.168.4.213:8092</div>
+    </div>
+  </div>
+
+  <div class="toolbar-controls">
+    <div class="field">
+      <input type="text" id="urlInput" value="ws://192.168.4.213:8092" spellcheck="false">
+    </div>
+    <div class="chip" id="statusChip"><span class="dot"></span><span id="statusText">disconnected</span></div>
+    <button id="connectBtn" class="filled">Connect</button>
+    <button id="clearBtn" class="icon-btn" title="Clear log">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+        <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 1 12a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<main>
+  <div class="card">
+    <div class="card-header">
+      <span class="label">Message Log</span>
+      <span class="stats">
+        <span id="footStats">0 sent · 0 received</span>
+        <span class="last-size" id="lastSizeChip">Last: —</span>
+        <span class="last-size rt-chip" id="lastRtChip">Resp: —</span>
+      </span>
+    </div>
+    <div id="log"></div>
+  </div>
+
+  <div class="interval-panel">
+    <span class="ip-label">Interval Send</span>
+    <input type="text" id="intervalMsg" value="getData" spellcheck="false" placeholder="message">
+    <input type="number" id="intervalMs" value="100" min="10" step="10">
+    <span class="ip-unit">ms</span>
+    <label class="ip-checkbox"><input type="checkbox" id="afterResponseChk" checked><span>Send after response</span></label>
+    <button id="intervalToggleBtn" class="tonal">Start</button>
+    <div class="interval-chip" id="intervalChip"><span class="dot"></span><span id="intervalChipText">stopped</span></div>
+  </div>
+
+  <div class="avg-panel">
+    <span class="ap-label">Average Data</span>
+
+    <div class="ap-group">
+      <input type="number" id="speedWindow" value="10" min="1" step="1">
+      <span class="ap-unit">s</span>
+      <div class="ap-pill tx-speed">
+        <span class="ap-label-text">TX</span>
+        <span class="ap-val" id="txSpeedVal">—</span>
+        <span class="ap-unit-sm">KB/s</span>
+      </div>
+      <div class="ap-pill rx-speed">
+        <span class="ap-label-text">RX</span>
+        <span class="ap-val" id="rxSpeedVal">—</span>
+        <span class="ap-unit-sm">KB/s</span>
+      </div>
+    </div>
+
+    <div class="ap-group">
+      <input type="number" id="statsWindow" value="20" min="1" step="1">
+      <span class="ap-unit">msgs</span>
+      <div class="ap-pill size-pill">
+        <span class="ap-label-text">Avg size</span>
+        <span class="ap-val" id="avgSizeVal">—</span>
+      </div>
+      <div class="ap-pill rt-pill">
+        <span class="ap-label-text">Avg resp</span>
+        <span class="ap-val" id="avgRtVal">—</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="composer">
+    <textarea id="msgInput" rows="1" placeholder="Type a message and press Enter to send…"></textarea>
+    <button id="sendBtn" class="fab" title="Send">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <path d="M3 11.5 20.5 4l-6 17-4-7-7.5-2.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" fill="currentColor"/>
+      </svg>
+    </button>
+  </div>
+</main>
+
+<footer>Enter to send · Shift+Enter for newline</footer>
+
+<div id="toastWrap"></div>
+
+<script>
+(function(){
+  const log = document.getElementById('log');
+  const urlInput = document.getElementById('urlInput');
+  const urlLabel = document.getElementById('urlLabel');
+  const connectBtn = document.getElementById('connectBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const statusChip = document.getElementById('statusChip');
+  const statusText = document.getElementById('statusText');
+  const msgInput = document.getElementById('msgInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const footStats = document.getElementById('footStats');
+  const toastWrap = document.getElementById('toastWrap');
+
+  const lastSizeChip = document.getElementById('lastSizeChip');
+  const lastRtChip = document.getElementById('lastRtChip');
+  const intervalMsg = document.getElementById('intervalMsg');
+  const intervalMs = document.getElementById('intervalMs');
+  const intervalToggleBtn = document.getElementById('intervalToggleBtn');
+  const intervalChip = document.getElementById('intervalChip');
+  const intervalChipText = document.getElementById('intervalChipText');
+  const afterResponseChk = document.getElementById('afterResponseChk');
+  const statsWindow = document.getElementById('statsWindow');
+  const avgSizeVal = document.getElementById('avgSizeVal');
+  const avgRtVal = document.getElementById('avgRtVal');
+
+  // speed elements
+  const speedWindowInput = document.getElementById('speedWindow');
+  const txSpeedVal = document.getElementById('txSpeedVal');
+  const rxSpeedVal = document.getElementById('rxSpeedVal');
+
+  let ws = null;
+  let sentCount = 0;
+  let recvCount = 0;
+  let intervalHandle = null;
+  let intervalTimeoutHandle = null;
+  let intervalActive = false;
+  let awaitingIntervalResponse = false;
+  let pendingRequestAt = null;
+  let intervalDelayMs = 100;
+  const rxHistory = [];
+
+  // speed tracking
+  const txSpeedData = []; // { time: perf, bytes: number }
+  const rxSpeedData = [];
+  let speedUpdaterId = null;
+  let speedWindowSeconds = 10;
+  
+  // Setup fast text encoder for payload sizing
+  const textEncoder = new TextEncoder();
+
+  // helpers
+  function ts(){
+    const d = new Date();
+    const p = n => String(n).padStart(2,'0');
+    const ms = String(d.getMilliseconds()).padStart(3,'0');
+    return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${ms}`;
+  }
+
+  function byteSize(text){
+    return textEncoder.encode(text).length;
+  }
+
+  function fmtBytes(n){
+    return n === 1 ? '1 B' : `${n} B`;
+  }
+
+  function fmtMs(n){
+    return n < 10 ? `${n.toFixed(1)} ms` : `${Math.round(n)} ms`;
+  }
+
+  function fmtSpeed(kbps){
+    if (kbps < 0.001) return '—';
+    if (kbps < 1000) return kbps.toFixed(2);
+    return (kbps / 1024).toFixed(2);
+  }
+
+  function updateLastSize(size, rt){
+    lastSizeChip.textContent = `Last: ${fmtBytes(size)}`;
+    lastSizeChip.classList.add('flash');
+    setTimeout(() => lastSizeChip.classList.remove('flash'), 250);
+
+    if(rt !== null && rt !== undefined){
+      lastRtChip.textContent = `Resp: ${fmtMs(rt)}`;
+    } else {
+      lastRtChip.textContent = 'Resp: —';
+    }
+    lastRtChip.classList.add('flash');
+    setTimeout(() => lastRtChip.classList.remove('flash'), 250);
+  }
+
+  function updateAverages(){
+    const n = Math.max(1, parseInt(statsWindow.value, 10) || 20);
+    const slice = rxHistory.slice(-n);
+    if(slice.length === 0){
+      avgSizeVal.textContent = '—';
+      avgRtVal.textContent = '—';
+      return;
+    }
+    const avgSize = slice.reduce((a, x) => a + x.size, 0) / slice.length;
+    avgSizeVal.textContent = fmtBytes(Math.round(avgSize));
+
+    const rts = slice.filter(x => x.rt !== null).map(x => x.rt);
+    avgRtVal.textContent = rts.length ? fmtMs(rts.reduce((a, x) => a + x, 0) / rts.length) : '—';
+  }
+
+  function recordRx(size, rt){
+    rxHistory.push({ size, rt });
+    if(rxHistory.length > 2000) rxHistory.shift();
+    updateAverages();
+  }
+
+  // speed core
+  function recordTxSpeed(bytes){
+    txSpeedData.push({ time: performance.now(), bytes });
+    const cutoff = performance.now() - 60000;
+    while (txSpeedData.length > 0 && txSpeedData[0].time < cutoff) txSpeedData.shift();
+    updateSpeeds(); // immediate update
+  }
+
+  function recordRxSpeed(bytes){
+    rxSpeedData.push({ time: performance.now(), bytes });
+    const cutoff = performance.now() - 60000;
+    while (rxSpeedData.length > 0 && rxSpeedData[0].time < cutoff) rxSpeedData.shift();
+    updateSpeeds();
+  }
+
+  function computeSpeed(data, windowSec){
+    if(data.length === 0) return 0;
+    const now = performance.now();
+    const cutoff = now - windowSec * 1000;
+    const filtered = [];
+    for (let i = data.length - 1; i >= 0; i--) {
+      if (data[i].time >= cutoff) filtered.push(data[i]);
+      else break;
+    }
+    if (filtered.length < 2) return 0;
+    const total = filtered.reduce((s, d) => s + d.bytes, 0);
+    
+    const newestTime = filtered[0].time;
+    const oldestTime = filtered[filtered.length - 1].time;
+    const duration = (newestTime - oldestTime) / 1000;
+    
+    if (duration < 0.05) return 0;
+    return (total / duration) / 1024; // KB/s
+  }
+
+  function updateSpeeds(){
+    const win = Math.max(1, parseFloat(speedWindowInput.value) || 10);
+    speedWindowSeconds = win;
+    const txKbps = computeSpeed(txSpeedData, win);
+    const rxKbps = computeSpeed(rxSpeedData, win);
+    txSpeedVal.textContent = fmtSpeed(txKbps);
+    rxSpeedVal.textContent = fmtSpeed(rxKbps);
+  }
+
+  function startSpeedUpdater(){
+    if(speedUpdaterId) return;
+    speedUpdaterId = setInterval(updateSpeeds, 1000);
+  }
+
+  function stopSpeedUpdater(){
+    if(speedUpdaterId){
+      clearInterval(speedUpdaterId);
+      speedUpdaterId = null;
+    }
+  }
+
+  function resetSpeedData(){
+    txSpeedData.length = 0;
+    rxSpeedData.length = 0;
+    txSpeedVal.textContent = '—';
+    rxSpeedVal.textContent = '—';
+  }
+
+  // log rows
+  function addRow(tag, cls, text, msgCls, sizeOverride, rt){
+    // Smart scroll detection before we add the new element
+    const isScrolledToBottom = log.scrollHeight - log.clientHeight <= log.scrollTop + 50;
+
+    const row = document.createElement('div');
+    row.className = 'row ' + cls;
+    let sizeHtml = '';
+    if(cls !== 'sys'){
+      const size = (sizeOverride !== undefined) ? sizeOverride : byteSize(text);
+      sizeHtml = `<span class="sz">Size: ${fmtBytes(size)}</span>`;
+      if(rt !== undefined && rt !== null){
+        sizeHtml += `<span class="rt">↺ ${fmtMs(rt)}</span>`;
+      }
+    }
+    row.innerHTML = `<span class="ts-wrap"><span class="ts">${ts()}</span>${sizeHtml}</span><span class="badge ${cls}">${tag}</span><span class="msg ${msgCls||''}"></span>`;
+    row.querySelector('.msg').textContent = text;
+    log.appendChild(row);
+    
+    // Prevent DOM bloat crash
+    const MAX_ROWS = 1000; 
+    while(log.children.length > MAX_ROWS) {
+        log.removeChild(log.firstChild);
+    }
+
+    // Only scroll if user was already at the bottom
+    if (isScrolledToBottom) {
+        log.scrollTop = log.scrollHeight;
+    }
+  }
+
+  function toast(text, type){
+    const t = document.createElement('div');
+    t.className = 'toast ' + (type || 'info');
+    t.textContent = text;
+    toastWrap.appendChild(t);
+    setTimeout(() => {
+      t.classList.add('fadeout');
+      setTimeout(() => t.remove(), 250);
+    }, 3200);
+  }
+
+  function updateStats(){
+    footStats.textContent = `${sentCount} sent · ${recvCount} received`;
+  }
+
+  function setStatus(state, label){
+    statusChip.className = 'chip ' + state;
+    statusText.textContent = label;
+  }
+
+  // connect / disconnect
+  function connect(){
+    const url = urlInput.value.trim();
+    if(!url) return;
+    urlLabel.textContent = url;
+    setStatus('connecting', 'connecting…');
+    addRow('SYS', 'sys', `Connecting to ${url}`, 'sys');
+    connectBtn.disabled = true;
+
+    try{
+      ws = new WebSocket(url);
+    }catch(e){
+      addRow('ERR', 'err', 'Failed to create socket: ' + e.message);
+      setStatus('error', 'error');
+      toast('Could not open socket: ' + e.message, 'error');
+      connectBtn.disabled = false;
+      return;
+    }
+
+    ws.onopen = () => {
+      setStatus('connected', 'connected');
+      addRow('SYS', 'sys', 'Connection established', 'sys');
+      connectBtn.textContent = 'Disconnect';
+      connectBtn.classList.add('stop');
+      connectBtn.disabled = false;
+      startSpeedUpdater();
+    };
+
+    ws.onmessage = (ev) => {
+      recvCount++;
+      updateStats();
+
+      let rt = null;
+      if(pendingRequestAt !== null){
+        rt = performance.now() - pendingRequestAt;
+        pendingRequestAt = null;
+      }
+
+      let realSize = 0;
+      if(typeof ev.data === 'string'){
+        realSize = byteSize(ev.data);
+        addRow('RX', 'rx', ev.data, null, realSize, rt);
+      } else {
+        realSize = (ev.data instanceof Blob) ? ev.data.size
+                  : (ev.data instanceof ArrayBuffer) ? ev.data.byteLength
+                  : 0;
+        addRow('BIN', 'bin', '[binary data]', null, realSize, rt);
+      }
+      updateLastSize(realSize, rt);
+      recordRx(realSize, rt);
+      recordRxSpeed(realSize);
+
+      // after-response interval continuation
+      if (intervalActive && awaitingIntervalResponse && afterResponseChk.checked) {
+        awaitingIntervalResponse = false;
+        const text = intervalMsg.value.trim();
+        if (text && ws && ws.readyState === WebSocket.OPEN) {
+          if (intervalTimeoutHandle) {
+            clearTimeout(intervalTimeoutHandle);
+            intervalTimeoutHandle = null;
+          }
+          intervalTimeoutHandle = setTimeout(() => {
+            if (intervalActive && ws && ws.readyState === WebSocket.OPEN) {
+              performIntervalSend(text);
+            }
+          }, intervalDelayMs);
+        } else if (!text) {
+          stopIntervalSender();
+          toast('Interval message empty — stopped', 'error');
+        }
+      }
+    };
+
+    ws.onerror = () => {
+      setStatus('error', 'error');
+      addRow('ERR', 'err', 'Socket error');
+      toast('WebSocket error', 'error');
+    };
+
+    ws.onclose = (ev) => {
+      setStatus('disconnected', 'disconnected');
+      addRow('SYS', 'sys', `Connection closed (code ${ev.code}${ev.reason ? ', ' + ev.reason : ''})`, 'sys');
+      connectBtn.textContent = 'Connect';
+      connectBtn.classList.remove('stop');
+      connectBtn.disabled = false;
+      ws = null;
+      pendingRequestAt = null;
+      stopIntervalSender();
+      stopSpeedUpdater();
+      resetSpeedData();
+    };
+  }
+
+  function disconnect(){
+    if(ws) ws.close();
+  }
+
+  connectBtn.addEventListener('click', () => {
+    if(ws && ws.readyState === WebSocket.OPEN) disconnect();
+    else connect();
+  });
+
+  statsWindow.addEventListener('input', updateAverages);
+  speedWindowInput.addEventListener('input', updateSpeeds);
+
+  clearBtn.addEventListener('click', () => {
+    log.innerHTML = '';
+    sentCount = 0; recvCount = 0;
+    rxHistory.length = 0;
+    pendingRequestAt = null;
+    lastSizeChip.textContent = 'Last: —';
+    lastRtChip.textContent = 'Resp: —';
+    updateStats();
+    updateAverages();
+    resetSpeedData();
+    txSpeedData.length = 0;
+    rxSpeedData.length = 0;
+  });
+
+  // send
+  function send(){
+    const text = msgInput.value;
+    if(!text.trim()) return;
+    if(!ws || ws.readyState !== WebSocket.OPEN){
+      toast('Not connected — cannot send', 'error');
+      return;
+    }
+    const size = byteSize(text);
+    ws.send(text);
+    sentCount++;
+    updateStats();
+    addRow('TX', 'tx', text);
+    recordTxSpeed(size);
+    pendingRequestAt = performance.now();
+    msgInput.value = '';
+    msgInput.style.height = 'auto';
+  }
+
+  sendBtn.addEventListener('click', send);
+
+  // interval send
+  function performIntervalSend(text){
+    if(!ws || ws.readyState !== WebSocket.OPEN){
+      stopIntervalSender();
+      toast('Connection lost — interval send stopped', 'error');
+      return;
+    }
+    const size = byteSize(text);
+    ws.send(text);
+    sentCount++;
+    updateStats();
+    addRow('TX', 'tx', text);
+    recordTxSpeed(size);
+    pendingRequestAt = performance.now();
+    if(afterResponseChk.checked){
+      awaitingIntervalResponse = true;
+    }
+  }
+
+  function startIntervalSender(){
+    const text = intervalMsg.value.trim();
+    const ms = Math.max(10, parseInt(intervalMs.value, 10) || 100);
+    if(!text){
+      toast('Enter a message to send on interval', 'error');
+      return;
+    }
+    if(!ws || ws.readyState !== WebSocket.OPEN){
+      toast('Not connected — cannot start interval send', 'error');
+      return;
+    }
+    intervalDelayMs = ms;
+    intervalActive = true;
+    const afterResponse = afterResponseChk.checked;
+
+    if(afterResponse){
+      performIntervalSend(text);
+    } else {
+      intervalHandle = setInterval(() => performIntervalSend(text), ms);
+    }
+
+    intervalToggleBtn.textContent = 'Stop';
+    intervalChip.classList.add('running');
+    intervalChipText.textContent = afterResponse ? `${ms}ms after response` : `every ${ms}ms`;
+    intervalMsg.disabled = true;
+    intervalMs.disabled = true;
+    afterResponseChk.disabled = true;
+  }
+
+  function stopIntervalSender(){
+    intervalActive = false;
+    awaitingIntervalResponse = false;
+    if(intervalHandle){
+      clearInterval(intervalHandle);
+      intervalHandle = null;
+    }
+    if(intervalTimeoutHandle){
+      clearTimeout(intervalTimeoutHandle);
+      intervalTimeoutHandle = null;
+    }
+    intervalToggleBtn.textContent = 'Start';
+    intervalChip.classList.remove('running');
+    intervalChipText.textContent = 'stopped';
+    intervalMsg.disabled = false;
+    intervalMs.disabled = false;
+    afterResponseChk.disabled = false;
+  }
+
+  intervalToggleBtn.addEventListener('click', () => {
+    if(intervalActive) stopIntervalSender();
+    else startIntervalSender();
+  });
+
+  // msg input
+  msgInput.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter' && !e.shiftKey){
+      e.preventDefault();
+      send();
+    }
+  });
+
+  msgInput.addEventListener('input', () => {
+    msgInput.style.height = 'auto';
+    msgInput.style.height = Math.min(msgInput.scrollHeight, 140) + 'px';
+  });
+
+  // init
+  window.addEventListener('load', () => {
+    connect();
+    startSpeedUpdater();
+  });
+})();
+</script>
+</body>
+</html>
