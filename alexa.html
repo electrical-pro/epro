@@ -3,211 +3,287 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
 <meta name="color-scheme" content="dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235cc8ff' stroke-width='2' stroke-linecap='round'%3E%3Crect x='9' y='3' width='6' height='11' rx='3'/%3E%3Cpath d='M5 11a7 7 0 0 0 14 0M12 18v3'/%3E%3C/svg%3E">
 <title>Assistant</title>
 <style>
-:root {
-  --bg: #0e1116; --panel: #161a21; --panel-2: #1c212a; --line: #262d38;
-  --text: #e7eaf0; --muted: #8d97a8; --accent: #5b9dff; --accent-ink: #07111f;
-  --ok: #3ecf8e; --warn: #f5a524; --bad: #ef5350;
-  --radius: 12px; --gap: 14px;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-}
-* { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
-body { display: flex; flex-direction: column; font-size: 15px; line-height: 1.45; }
-button, input { font: inherit; color: inherit; }
-button { cursor: pointer; }
-button:disabled { cursor: not-allowed; opacity: .45; }
+  :root {
+    color-scheme: dark;                      /* dark scrollbars, form controls and overscroll in every browser */
+    scrollbar-color: var(--border-light) var(--bg);
 
-/* ---- header ---- */
-header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line);
-         background: var(--panel); flex-wrap: wrap; }
-header h1 { font-size: 17px; margin: 0 6px 0 0; letter-spacing: .2px; }
-.pill { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border-radius: 99px;
-        background: var(--panel-2); border: 1px solid var(--line); font-size: 13px; color: var(--muted); white-space: nowrap; }
-.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-.pill.online .dot { background: var(--ok); }
-.pill.connecting .dot { background: var(--warn); animation: pulse 1s infinite; }
-.pill.offline .dot { background: var(--bad); }
-button.pill:hover { border-color: var(--accent); color: var(--text); }
-#phase { color: var(--text); }
-#phase.idle .dot { background: var(--muted); }
-#phase.loading .dot, #phase.thinking .dot { background: var(--warn); animation: pulse 1s infinite; }
-#phase.wake .dot, #phase.recording .dot { background: var(--bad); animation: pulse .6s infinite; }
-#phase.transcribing .dot { background: var(--accent); animation: pulse .8s infinite; }
-#phase.speaking .dot { background: var(--ok); animation: pulse .8s infinite; }
-#info { color: var(--muted); font-size: 12.5px; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
-@keyframes pulse { 50% { opacity: .35; } }
+    --bg: #000000;
+    --panel: #070b0e;
+    --panel-2: #0b1116;
+    --border: #1f2b33;
+    --border-light: #2c3e4a;
 
-/* ---- layout ---- */
-main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 350px; gap: var(--gap); padding: var(--gap); }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
-.card h2 { margin: 0 0 10px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
-aside { display: flex; flex-direction: column; gap: var(--gap); overflow-y: auto; min-height: 0; padding-bottom: 2px; }
-@media (max-width: 860px) {
-  main { grid-template-columns: 1fr; padding: 10px; }
-  .chat { min-height: 62dvh; }
-  aside { overflow: visible; }
-}
+    --text: #ecfaff;
+    --muted: #8fa3ad;
+    --dim: #4e6370;
 
-/* ---- chat ---- */
-.chat { display: flex; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; }
-#log { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
-.empty { margin: auto; text-align: center; color: var(--muted); max-width: 30ch; }
-.msg { display: flex; flex-direction: column; max-width: min(78%, 62ch); }
-.msg.user { align-self: flex-end; align-items: flex-end; }
-.msg.assistant { align-self: flex-start; }
-.meta { font-size: 11.5px; color: var(--muted); margin: 0 6px 3px; display: flex; gap: 8px; }
-.meta .src { text-transform: uppercase; letter-spacing: .6px; }
-.bubble { padding: 9px 13px; border-radius: 14px; background: var(--panel-2); border: 1px solid var(--line); overflow-wrap: anywhere; white-space: pre-wrap; }
-.msg.user .bubble { background: var(--accent); color: var(--accent-ink); border-color: transparent; border-bottom-right-radius: 4px; }
-.msg.assistant .bubble { border-bottom-left-radius: 4px; }
-.msg.live .bubble::after { content: ""; display: inline-block; width: 7px; height: 14px; margin-left: 3px; vertical-align: -2px; background: var(--muted); animation: pulse 1s infinite; }
-#status { padding: 0 16px; min-height: 26px; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
-#status .bars { display: none; gap: 3px; align-items: center; height: 14px; }
-#status.busy .bars { display: inline-flex; }
-.bars i { width: 3px; height: 100%; background: var(--accent); border-radius: 2px; animation: bar 1s ease-in-out infinite; }
-.bars i:nth-child(2) { animation-delay: .15s; } .bars i:nth-child(3) { animation-delay: .3s; }
-@keyframes bar { 0%, 100% { transform: scaleY(.3); } 50% { transform: scaleY(1); } }
-#note { color: var(--warn); margin-left: auto; }
-form#composer { display: flex; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--line); }
-form#composer input { flex: 1; min-width: 0; padding: 10px 13px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); outline: none; }
-form#composer input:focus { border-color: var(--accent); }
-.btn { padding: 9px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); }
-.btn:hover:not(:disabled) { border-color: var(--accent); }
-.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+    --green: #08e18e;
+    --red: #ff5f5f;
+    --amber: #ffae34;
+    --cyan: #5cc8ff;
+    --violet: #a78bfa;
+    --accent: var(--cyan);
 
-/* ---- controls ---- */
-.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 3px; }
-.seg button { border: 0; background: transparent; padding: 8px 6px; border-radius: 8px; color: var(--muted); }
-.seg button.on { background: var(--panel-2); color: var(--text); box-shadow: 0 0 0 1px var(--accent) inset; }
-.seg button:hover:not(:disabled):not(.on) { color: var(--text); }
-.row { display: flex; gap: 8px; align-items: center; }
-.sub { color: var(--muted); font-size: 12.5px; margin-top: 7px; }
-.stack > * + * { margin-top: 10px; }
-#ptt { width: 100%; padding: 16px; font-size: 16px; font-weight: 600; border-radius: 12px; border: 1px solid var(--line); background: var(--panel-2); user-select: none; -webkit-user-select: none; touch-action: none; }
-#ptt.down { background: var(--bad); border-color: transparent; color: #fff; }
-#ptt:hover:not(:disabled):not(.down) { border-color: var(--accent); }
+    --green-glow: rgba(8, 225, 142, .2);
+    --red-glow: rgba(255, 105, 105, .2);
+    --amber-glow: rgba(255, 174, 52, .14);
+    --cyan-glow: rgba(92, 200, 255, .2);
+    --violet-glow: rgba(167, 139, 250, .18);
 
-/* ---- devices ---- */
-.dev { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
-.dev + .dev { margin-top: 8px; }
-.dev.holder { border-color: var(--accent); }
-.dev-main { flex: 1; min-width: 0; }
-.dev-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dev-name .tag { font-weight: 500; font-size: 11px; color: var(--accent); border: 1px solid var(--accent); border-radius: 99px; padding: 0 6px; margin-left: 6px; }
-.dev-name.me { cursor: text; }
-.dev-sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dev-sub.bad { color: var(--bad); } .dev-sub.good { color: var(--ok); }
-.icon { width: 36px; height: 36px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel-2); display: grid; place-items: center; padding: 0; color: var(--muted); }
-.icon svg { width: 19px; height: 19px; fill: currentColor; }
-.icon.on { color: var(--accent-ink); background: var(--accent); border-color: transparent; }
-.icon.ok { color: var(--ok); }
-.icon.off { color: var(--bad); }
-.icon:hover:not(:disabled):not(.on) { border-color: var(--accent); color: var(--text); }
+    --r-xs: 6px; --r-sm: 8px; --r-md: 10px; --r-lg: 12px;
+    --ease: cubic-bezier(.4, 0, .2, 1);
+    --dur-instant: .1s; --dur-fast: .15s; --dur-base: .3s;
+  }
+  @media (forced-colors: active) { :root { forced-color-adjust: none; } }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); -webkit-text-size-adjust: 100%; text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif; }
+  button, input { font: inherit; color: inherit; }
+  [hidden] { display: none !important; }
 
-/* ---- sliders / meter ---- */
-.field { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; }
-.field + .field { margin-top: 12px; }
-.field label { color: var(--text); font-size: 13.5px; }
-.field output { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 13px; }
-.field input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
-.field small { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
-.meter { position: relative; height: 10px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; }
-.meter i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--muted); transition: width .06s linear; }
-.meter.open i { background: var(--ok); }
-.meter b { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--warn); }
-details > summary { cursor: pointer; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .8px; font-weight: 600; list-style: none; }
-details > summary::-webkit-details-marker { display: none; }
-details > summary::before { content: "▸ "; } details[open] > summary::before { content: "▾ "; }
-details[open] > summary { margin-bottom: 10px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
+  .layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; }
+  @media (max-width: 860px) {
+    main { height: auto; }
+    .layout { display: block; }
+    .chat { min-height: 62vh; min-height: 62dvh; margin-bottom: 14px; }
+  }
 
-/* ---- overlays ---- */
-#banner { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 5; display: none; max-width: calc(100% - 24px);
-          background: var(--warn); color: #1b1200; padding: 10px 16px; border-radius: 12px; font-weight: 600; box-shadow: 0 6px 24px #0008; border: 0; }
-#banner.show { display: block; }
-#hint { display: none; padding: 10px 16px; background: #2a1d0b; border-bottom: 1px solid #5a3b0f; color: #f6d9a8; font-size: 13.5px; }
-#hint.show { display: block; }
-.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  /* ── header ── */
+  header { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 6px 14px; margin: 0 0 14px; padding: 0 0 10px; border-bottom: 1px solid var(--border); }
+  .htitle { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 12px; min-width: 0; }
+  h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.01em; }
+  #info { font-size: 12.3px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+  .head-right { display: flex; align-items: center; gap: 16px; font-size: 13px; color: var(--muted); }
+  .ind { display: inline-flex; align-items: center; gap: 7px; padding: 0; border: 0; background: none; color: var(--muted); font-size: 12.3px; white-space: nowrap; cursor: default; }
+  .ind .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); flex: none; }
+  #phase { color: var(--text); }
+  #phase.idle .dot { background: var(--dim); }
+  #phase.loading .dot, #phase.thinking .dot { background: var(--amber); animation: pulse 1s ease-in-out infinite; }
+  #phase.wake .dot, #phase.recording .dot { background: var(--red); animation: pulse .6s ease-in-out infinite; }
+  #phase.transcribing .dot { background: var(--cyan); animation: pulse .8s ease-in-out infinite; }
+  #phase.speaking .dot { background: var(--green); animation: pulse .8s ease-in-out infinite; }
+  #conn { cursor: pointer; transition: color var(--dur-fast); }
+  #conn:hover { color: var(--text); }
+  #conn.online .dot { background: var(--green); }
+  #conn.connecting .dot { background: var(--amber); animation: pulse 1s ease-in-out infinite; }
+  #conn.offline .dot { background: var(--red); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #hint { display: none; margin: 0 0 14px; padding: 10px 14px; border: 1px solid var(--amber); border-radius: var(--r-md); background: var(--amber-glow); color: var(--amber); font-size: 13px; }
+  #hint.show { display: block; }
+
+  /* ── sections (cards) ── */
+  section { background: var(--panel); background-clip: padding-box; border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; }
+  aside { display: flex; flex-direction: column; gap: 14px; overflow-y: auto; min-height: 0; padding-bottom: 2px; scrollbar-width: thin; }
+  aside > section { flex: none; }
+  h2 { margin: 0 0 10px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .sub { margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .empty { margin: auto; max-width: 30ch; text-align: center; color: var(--muted); font-size: 13px; }
+
+  /* ── buttons ── */
+  button { cursor: pointer; background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--r-md); transition: border-color var(--dur-fast), background var(--dur-fast), color var(--dur-fast), opacity var(--dur-fast); -webkit-tap-highlight-color: transparent; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:active:not(:disabled) { background: #1f2b33; }
+  button:disabled { opacity: .45; cursor: default; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .smallbtn { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: var(--r-sm); font-size: 13px; color: var(--muted); }
+  .smallbtn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .smallbtn:hover:not(:disabled) { color: var(--text); }
+
+  /* ── chat ── */
+  .chat { display: flex; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; }
+  .chat-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 10px 10px 14px; border-bottom: 1px solid var(--border); }
+  .chat-head h2 { margin: 0; }
+  #log { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; scrollbar-width: thin; }
+  .msg { display: flex; flex-direction: column; max-width: min(80%, 62ch); }
+  .msg.user { align-self: flex-end; align-items: flex-end; }
+  .msg.assistant { align-self: flex-start; }
+  .meta { display: flex; align-items: center; gap: 8px; margin: 0 4px 4px; font-size: 11.5px; color: var(--muted); }
+  .meta time { font-variant-numeric: tabular-nums; }
+  .badge { font-style: normal; font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); border: 1px solid currentColor; border-radius: var(--r-xs); padding: 1px 6px; }
+  .badge.k-voice { color: var(--cyan); }
+  .badge.k-text { color: var(--muted); }
+  .badge.k-rule { color: var(--green); }
+  .badge.k-llm { color: var(--violet); }
+  .bubble { padding: 9px 13px; border-radius: var(--r-lg); background: var(--panel-2); border: 1px solid var(--border); overflow-wrap: anywhere; white-space: pre-wrap; }
+  .msg.user .bubble { background: var(--violet-glow); border-color: rgba(167, 139, 250, .45); border-bottom-right-radius: 4px; }
+  .msg.assistant .bubble { border-bottom-left-radius: 4px; }
+  .msg.live .bubble::after { content: ""; display: inline-block; width: 7px; height: 14px; margin-left: 3px; vertical-align: -2px; background: var(--muted); animation: pulse 1s ease-in-out infinite; }
+  #status { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 14px; color: var(--muted); font-size: 13px; }
+  #statusText { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #status .bars { display: none; gap: 3px; align-items: center; height: 14px; flex: none; }
+  #status.busy .bars { display: inline-flex; }
+  .bars i { width: 3px; height: 100%; background: var(--accent); border-radius: 2px; animation: bar 1s ease-in-out infinite; }
+  .bars i:nth-child(2) { animation-delay: .15s; } .bars i:nth-child(3) { animation-delay: .3s; }
+  @keyframes bar { 0%, 100% { transform: scaleY(.3); } 50% { transform: scaleY(1); } }
+  #stop { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 2px 11px 2px 9px; border-radius: 999px; font-size: 12px; color: var(--red); border-color: rgba(255, 95, 95, .45); background: rgba(255, 95, 95, .08); }
+  #stop i { width: 8px; height: 8px; border-radius: 2px; background: currentColor; }
+  #stop:hover:not(:disabled) { border-color: var(--red); }
+  #composer { display: flex; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--border); }
+  #text { flex: 1; min-width: 0; padding: 12px; border-radius: var(--r-md); border: 1px solid var(--border); background: var(--panel-2); outline: none; transition: border-color var(--dur-fast); }
+  #text:focus { border-color: var(--accent); }
+  #text::placeholder { color: var(--dim); }
+  #send { padding: 12px 16px; color: var(--cyan); border-color: rgba(92, 200, 255, .45); background: rgba(92, 200, 255, .08); font-weight: 600; }
+  #send:hover:not(:disabled) { border-color: var(--cyan); }
+  #ptt { flex: none; width: 46px; padding: 0; display: grid; place-items: center; color: var(--text); user-select: none; -webkit-user-select: none; touch-action: none; -webkit-touch-callout: none; }
+  #ptt svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+  #ptt.down { color: var(--red); border-color: var(--red); background: var(--red-glow); box-shadow: 0 0 0 4px rgba(255, 95, 95, .15); }
+
+  /* ── mode ── */
+  .seg { display: flex; background: var(--border); border-radius: var(--r-md); padding: 3px; gap: 3px; }
+  .seg button { flex: 1; padding: 9px 12px; border: 0; background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; border-radius: var(--r-sm); }
+  .seg button:hover:not(:disabled):not(.on) { color: var(--text); }
+  .seg button.on { background: var(--accent); color: var(--bg); box-shadow: 0 2px 6px var(--cyan-glow); }
+  .check { display: flex; align-items: center; gap: 10px; margin-top: 14px; cursor: pointer; user-select: none; font-size: 14px; }
+  .check input { appearance: none; -webkit-appearance: none; flex: none; width: 20px; height: 20px; margin: 0; display: grid; place-content: center; border: 2px solid var(--border-light); border-radius: var(--r-xs); background: transparent; cursor: pointer; transition: background var(--dur-fast), border-color var(--dur-fast); }
+  .check input:checked { background: var(--accent); border-color: var(--accent); }
+  .check input:checked::after { content: ""; width: 5px; height: 10px; margin-top: -2px; border: solid #000; border-width: 0 2.5px 2.5px 0; transform: rotate(45deg); }
+  .check input:disabled { opacity: .45; cursor: default; }
+
+  /* ── browsers (device rows, as on the media page) ── */
+  #devices { display: flex; flex-direction: column; gap: 8px; }
+  .dev { --accent: var(--green); }
+  .dev[data-kind="me"] { --accent: var(--violet); }
+  .dev-main { display: flex; align-items: center; gap: 10px; padding: 9px 10px 9px 12px; background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--r-md); transition: border-color var(--dur-fast); }
+  .dev.holder .dev-main { border-color: var(--accent); background: rgba(255, 255, 255, .035); }
+  .ico { position: relative; flex: none; width: 32px; height: 32px; color: var(--accent); }
+  .ico svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .ico::after { content: ""; position: absolute; right: -3px; bottom: -3px; width: 11px; height: 11px; border-radius: 50%; background: var(--dim); border: 2px solid var(--panel-2); }
+  .ico.s-live::after { background: var(--green); }
+  .ico.s-wait::after { background: var(--amber); animation: pulse 1s ease-in-out infinite; }
+  .ico.s-bad::after { background: var(--red); animation: pulse 1s ease-in-out infinite; }
+  .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .nm { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .nm.me { cursor: text; }
+  .nm b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .st { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .st.good { color: var(--green); } .st.bad { color: var(--red); }
+  .tbtn { flex: none; width: 36px; height: 34px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-sm); color: var(--muted); }
+  .tbtn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .tbtn.on { color: var(--green); border-color: var(--green); background: rgba(8, 225, 142, .16); }
+  .tbtn.off { color: var(--red); border-color: rgba(255, 95, 95, .5); background: rgba(255, 95, 95, .14); }
+  .tbtn:hover:not(:disabled):not(.off):not(.on) { color: var(--text); }
+
+  /* ── sliders and the level meter ── */
+  .field { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 10px; }
+  .field + .field { margin-top: 16px; }
+  .field label { font-size: 13.5px; }
+  .field output { font-size: 13px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .field small { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+  input[type=range] { --p: 0%; grid-column: 1 / -1; width: 100%; height: 28px; margin: 0; padding: 0; background: transparent; -webkit-appearance: none; appearance: none; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 6px; border: 0; border-radius: 3px; background: linear-gradient(to right, var(--accent) var(--p), var(--border-light) var(--p)); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; margin-top: -6px; border: 0; border-radius: 50%; background: var(--accent); transition: transform var(--dur-instant); }
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+  input[type=range]::-moz-range-track { height: 6px; border: 0; border-radius: 3px; background: var(--border-light); }
+  input[type=range]::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--accent); }
+  input[type=range]::-moz-range-thumb { box-sizing: border-box; width: 18px; height: 18px; border: 0; border-radius: 50%; background: var(--accent); transition: transform var(--dur-instant); }
+  input[type=range]::-moz-range-thumb:hover { transform: scale(1.15); }
+  .meter { position: relative; height: 6px; border-radius: 3px; background: var(--border-light); }
+  .meter i { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 3px; background: var(--muted); transition: width .06s linear; }
+  .meter.open i { background: var(--green); }
+  .meter b { position: absolute; top: -4px; bottom: -4px; width: 2px; border-radius: 1px; background: var(--amber); }
+  #micCard .sub { margin: 8px 0 14px; }
+  details > summary { cursor: pointer; list-style: none; margin: 0; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::before { content: "▸"; display: inline-block; width: 1.2em; }
+  details[open] > summary::before { content: "▾"; }
+  details[open] > summary { margin-bottom: 14px; }
+
+  /* ── toast and the "tap to start" button ── */
+  #toast { position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 20px); max-width: calc(100% - 32px); padding: 12px 16px; border-radius: var(--r-md); border: 1px solid var(--border); background: var(--panel-2); opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; font-size: 14px; z-index: 20; }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  #toast.info { border-color: var(--cyan); color: var(--cyan); }
+  #toast.err { border-color: var(--red); color: var(--red); }
+  #banner { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 30; display: none; max-width: calc(100% - 32px); padding: 12px 18px; font-weight: 600; font-size: 14px; color: var(--amber); border-color: var(--amber); background: var(--panel-2); box-shadow: 0 10px 30px rgba(0, 0, 0, .5); }
+  #banner.show { display: block; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
-<header>
-  <h1>Assistant</h1>
-  <button id="conn" class="pill connecting" title="Change server"><span class="dot"></span><span id="connText">connecting…</span></button>
-  <span id="phase" class="pill loading"><span class="dot"></span><span id="phaseText">Loading…</span></span>
-  <span id="info"></span>
-</header>
-<div id="hint"></div>
-
 <main>
-  <section class="card chat">
-    <div id="log" aria-live="polite"></div>
-    <div id="status"><span class="bars"><i></i><i></i><i></i></span><span id="statusText"></span><span id="note"></span></div>
-    <form id="composer" autocomplete="off">
-      <input id="text" type="text" placeholder="Type a message…" maxlength="500" aria-label="Message">
-      <button class="btn primary" type="submit" id="send">Send</button>
-    </form>
-  </section>
-
-  <aside>
-    <div class="card stack">
-      <h2>Mode</h2>
-      <div class="seg" id="modeSeg">
-        <button data-mode="pc">PC mode</button>
-        <button data-mode="browser">Browser mode</button>
-      </div>
-      <div class="sub" id="modeSub"></div>
-      <div class="seg" id="trigSeg">
-        <button data-trig="wake">Wake word</button>
-        <button data-trig="ptt">Push to talk</button>
-      </div>
-      <button id="ptt" disabled>Hold to talk</button>
-      <div class="row">
-        <button class="btn" id="stop" style="flex:1">Stop speaking</button>
-        <button class="btn" id="clear" style="flex:1">Clear chat</button>
-      </div>
+  <header>
+    <div class="htitle"><h1>Assistant</h1><span id="info"></span></div>
+    <div class="head-right">
+      <span id="phase" class="ind loading"><i class="dot"></i><span id="phaseText">Loading…</span></span>
+      <button id="conn" type="button" class="ind connecting" title="Change server"><i class="dot"></i><span id="connText">connecting…</span></button>
     </div>
+  </header>
+  <div id="hint" role="status"></div>
 
-    <div class="card">
-      <h2>Devices</h2>
-      <div id="devices"></div>
-      <div class="sub">Mic = who listens. Speaker = who hears the answers; you can switch any device.</div>
-    </div>
-
-    <div class="card" id="micCard" hidden>
-      <h2>This microphone</h2>
-      <div class="meter" id="meter"><i></i><b id="gateMark"></b></div>
-      <div class="sub" id="meterText">—</div>
-      <div class="field" style="margin-top:12px">
-        <label for="gate">Send-sound threshold</label><output id="gateOut"></output>
-        <input id="gate" type="range" min="40" max="3000" step="10">
-        <small>Only sound above this level (plus a moment before and after) is sent to the PC.</small>
+  <div class="layout">
+    <section class="chat">
+      <div class="chat-head">
+        <h2>Conversation</h2>
+        <button class="smallbtn" id="clear" type="button" title="Clear the chat for everyone"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12.500a1.500 1.500 0 0 0 1.500 1.500h7a1.500 1.500 0 0 0 1.500-1.500L18 7M9 7V4.500h6V7"/></svg><span>Clear chat</span></button>
       </div>
-    </div>
+      <div id="log" aria-live="polite"></div>
+      <div id="status"><span class="bars"><i></i><i></i><i></i></span><span id="statusText"></span><button type="button" id="stop" title="Stop speaking" hidden><i></i>Stop</button></div>
+      <form id="composer" autocomplete="off">
+        <input id="text" type="text" placeholder="Type a message…" maxlength="500" aria-label="Message">
+        <button type="submit" id="send">Send</button>
+        <button type="button" id="ptt" hidden disabled aria-label="Hold to talk" title="Hold to talk"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+      </form>
+    </section>
 
-    <div class="card">
-      <details>
-        <summary>Recognition settings</summary>
-        <div class="field">
-          <label for="wake">Wake word threshold</label><output id="wakeOut"></output>
-          <input id="wake" type="range" min="0.5" max="0.99" step="0.01">
-          <small>Lower = reacts more easily, but more false wake-ups.</small>
+    <aside>
+      <section>
+        <h2>Mode</h2>
+        <div class="seg" id="modeSeg">
+          <button data-mode="pc">PC mode</button>
+          <button data-mode="browser">Browser mode</button>
         </div>
+        <div class="sub" id="modeSub"></div>
+        <label class="check" id="wakeRow" hidden><input type="checkbox" id="wakeOn"><span>Listen for the wake word</span></label>
+      </section>
+
+      <section id="devCard" hidden>
+        <h2>Browsers</h2>
+        <div id="devices"></div>
+        <div class="sub">Mic = which browser listens (click it again to stop listening). Speaker = who hears the answers; you can switch any browser.</div>
+      </section>
+
+      <section id="micCard" hidden>
+        <h2>This microphone</h2>
+        <div class="meter" id="meter"><i></i><b id="gateMark"></b></div>
+        <div class="sub" id="meterText">—</div>
         <div class="field">
-          <label for="thPc">Speech level, PC mic</label><output id="thPcOut"></output>
-          <input id="thPc" type="range" min="50" max="3000" step="10">
+          <label for="gate">Send-sound threshold</label><output id="gateOut"></output>
+          <input id="gate" type="range" min="40" max="3000" step="10">
+          <small>Only sound above this level (plus a moment before and after) is sent to the PC.</small>
         </div>
-        <div class="field">
-          <label for="thBr">Speech level, browser mic</label><output id="thBrOut"></output>
-          <input id="thBr" type="range" min="50" max="3000" step="10">
-          <small>Level the command must reach to count as speech (and to end after silence).</small>
-        </div>
-      </details>
-    </div>
-  </aside>
+      </section>
+
+      <section>
+        <details>
+          <summary>Recognition settings</summary>
+          <div class="field">
+            <label for="wake">Wake word threshold</label><output id="wakeOut"></output>
+            <input id="wake" type="range" min="0.5" max="0.99" step="0.01">
+            <small>Lower = reacts more easily, but more false wake-ups.</small>
+          </div>
+          <div class="field" id="fPc">
+            <label for="thPc">Speech level, PC mic</label><output id="thPcOut"></output>
+            <input id="thPc" type="range" min="50" max="3000" step="10">
+            <small>Level the command must reach to count as speech (and to end after silence).</small>
+          </div>
+          <div class="field" id="fBr" hidden>
+            <label for="thBr">Speech level, browser mic</label><output id="thBrOut"></output>
+            <input id="thBr" type="range" min="50" max="3000" step="10">
+            <small>Level the command must reach to count as speech (and to end after silence).</small>
+          </div>
+        </details>
+      </section>
+    </aside>
+  </div>
 </main>
+<div id="toast"></div>
 <button id="banner" type="button"></button>
 
 <script>
@@ -219,6 +295,9 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); } catch {} },
 };
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// Must match PROTOCOL in web_server.py. A page hosted elsewhere (GitHub) can be older or newer than the server.
+const PROTOCOL = 3;
 
 // --- tuning knobs ---------------------------------------------------------------------------
 const MIC_CONSTRAINTS = { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true };
@@ -273,7 +352,7 @@ const myName = () => params.get("name") || store.get("name") || guessName();
 
 function setConn(kind, text) {
   const b = $("#conn");
-  b.className = "pill " + kind;
+  b.className = "ind " + kind;
   $("#connText").textContent = text;
 }
 
@@ -304,6 +383,17 @@ function connect() {
     retry = Math.min(retry * 1.7, 6000);
   };
 }
+let toastTimer, lastNote = "";
+function showNote(text) {                       // short server messages ("No speech heard") as a toast
+  if (text === lastNote) return;
+  lastNote = text;
+  const t = $("#toast");
+  clearTimeout(toastTimer);
+  if (!text) { t.classList.remove("show"); return; }
+  t.textContent = text;
+  t.className = "show " + (/^error/i.test(text) ? "err" : "info");
+  toastTimer = setTimeout(() => t.classList.remove("show"), 4500);
+}
 function showHint(html) { const h = $("#hint"); h.innerHTML = html; h.classList.toggle("show", !!html); }
 function askServer() {
   const v = prompt("Assistant server (address:port), e.g. 192.168.1.20:8198", store.get("server") || "");
@@ -314,7 +404,9 @@ $("#conn").onclick = askServer;
 function onMessage(ev) {
   if (typeof ev.data !== "string") { playAudio(ev.data); return; }
   let m; try { m = JSON.parse(ev.data); } catch { return; }
-  if (m.t === "hello") { myId = m.id; state = {}; sendPatch({ clients: { [myId]: { name: myName() } } }); }
+  if (m.t === "hello") {
+    if (m.v !== PROTOCOL) showHint("This page and the assistant server are different versions (page " + PROTOCOL + ", server " + (m.v ?? "old") + "). Update the hosted page and the server from the same Assistant folder, then reload with Ctrl+F5.");
+    myId = m.id; state = {}; sendPatch({ clients: { [myId]: { name: myName() } } }); }
   else if (m.t === "patch") { state = merge(state, m.p); onState(m.p); }
   else if (m.t === "chime") chime(m.name);
   else if (m.t === "stop") stopPlayback();
@@ -323,7 +415,7 @@ function onMessage(ev) {
 function onState(p) {
   if ("chat" in p) renderChat(p.chat);
   if (Object.keys(p).some(k => k !== "chat")) renderAll();
-  const iHold = myId && state.mic === myId;
+  const iHold = !!myId && state.mode === "browser" && state.mic === myId;
   if (iHold && capState === "idle") startCapture();
   else if (!iHold && capState !== "idle") stopCapture();
 }
@@ -343,10 +435,11 @@ function renderChat(changed) {
     const m = state.chat?.[id]; if (!m) continue;
     if (!el) {
       el = document.createElement("div");
-      el.innerHTML = '<div class="meta"><span class="who"></span><span class="src"></span><time></time></div><div class="bubble"></div>';
+      el.innerHTML = '<div class="meta"><span class="who"></span><em class="src badge"></em><time></time></div><div class="bubble"></div>';
       logEl.appendChild(el); chatEls.set(id, el);
       $(".who", el).textContent = m.role === "user" ? "You" : "Assistant";
       $(".src", el).textContent = SRC[m.src] || m.src || "";
+      $(".src", el).classList.add("k-" + m.src);
       $("time", el).textContent = fmtTime(m.ts);
     }
     el.className = "msg " + m.role + (m.done ? "" : " live");
@@ -360,9 +453,12 @@ function renderChat(changed) {
 
 // --- rendering controls -------------------------------------------------------------------------
 const ICON = {
-  mic: '<svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-2z"/></svg>',
-  spk: '<svg viewBox="0 0 24 24"><path d="M3 10v4h4l5 4V6L7 10H3zm13.5 2a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg>',
-  spkOff: '<svg viewBox="0 0 24 24"><path d="M3 10v4h4l5 4V6L7 10H3z"/><path d="M15.4 9.3l1.4-1.4 2.2 2.2 2.2-2.2 1.4 1.4-2.2 2.2 2.2 2.2-1.4 1.4-2.2-2.2-2.2 2.2-1.4-1.4 2.2-2.2z"/></svg>',
+  mic: '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
+  spk: '<svg viewBox="0 0 24 24"><path d="M4 9.500v5h3.500L12 18.500v-13L7.500 9.500z"/><path d="M16 10.500c.9.9.9 2.100 0 3"/><path d="M18.500 8c2 2 2 6 0 8"/></svg>',
+  micOff: '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M3.500 3.500l17 17"/></svg>',
+  spkOff: '<svg viewBox="0 0 24 24"><path d="M4 9.500v5h3.500L12 18.500v-13L7.500 9.500z"/><path d="M16.500 9.500l5 5M21.500 9.500l-5 5"/></svg>',
+  monitor: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12.500" rx="2"/><path d="M8 21h8M12 16.500V21"/></svg>',
+  phone: '<svg viewBox="0 0 24 24"><rect x="7" y="2.500" width="10" height="19" rx="2.500"/><path d="M11 18.500h2"/></svg>',
 };
 const PHASE = {
   loading: ["Loading models…", "Starting up — loading the speech models"],
@@ -377,82 +473,103 @@ const MIC_MSG = {
 };
 
 function holderName() { return state.clients?.[state.mic]?.name || "—"; }
+const clientIds = () => Object.keys(state.clients || {}).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
 function renderAll() {
   const connected = !!myId;
+  const browserMode = state.mode === "browser", iHold = browserMode && state.mic === myId;
   // header
   const ph = state.phase || "loading";
-  $("#phase").className = "pill " + ph;
+  $("#phase").className = "ind " + ph;
   $("#phaseText").textContent = connected ? PHASE[ph]?.[0] || ph : "—";
   const info = state.info || {};
   $("#info").textContent = [info.llm, info.stt && "STT " + info.stt, info.wake && "wake “" + info.wake + "”"].filter(Boolean).join("  ·  ");
   // status line in chat
   const st = $("#status");
-  const busy = connected && !["idle", "loading"].includes(ph);
-  st.classList.toggle("busy", busy);
+  st.classList.toggle("busy", connected && !["idle", "loading"].includes(ph));
   let line = PHASE[ph]?.[1] || "";
-  if (ph === "idle" && connected) line = state.trigger === "ptt" ? "Ready. Hold the talk button to speak." : "Ready. Say the wake word, or hold the talk button.";
+  if (ph === "idle" && connected) {
+    if (!browserMode) line = "Ready. The PC is listening: say the wake word.";
+    else if (!state.mic) line = "Nobody is listening. Give the mic to a browser below.";
+    else if (!iHold) line = `“${holderName()}” is listening.`;
+    else line = state.wake === false ? "Ready. Hold the mic button to speak." : "Ready. Say the wake word, or hold the mic button.";
+  }
   $("#statusText").textContent = connected ? line : "Not connected";
-  $("#note").textContent = state.note || "";
+  $("#stop").hidden = !(connected && (ph === "speaking" || ph === "thinking"));
+  showNote(state.note || "");
 
-  // mode
-  const pcMode = state.mic === "pc", iHold = state.mic === myId;
+  // mode: PC mode = pure PC, nothing else to set; Browser mode = browsers only
   $("#modeSeg").querySelectorAll("button").forEach(b => {
-    b.classList.toggle("on", connected && (b.dataset.mode === "pc") === pcMode);
+    b.classList.toggle("on", connected && b.dataset.mode === (browserMode ? "browser" : "pc"));
     b.disabled = !connected;
   });
-  $('[data-mode="browser"]').textContent = (!pcMode && !iHold) ? "Take mic here" : "Browser mode";
-  $("#modeSub").textContent = !connected ? "" : pcMode ? "The PC listens and speaks. Pages only watch."
-    : iHold ? "This browser listens. Speakers can be switched per device below." : `“${holderName()}” listens. Press the button to take over.`;
-  $("#trigSeg").querySelectorAll("button").forEach(b => { b.classList.toggle("on", b.dataset.trig === state.trigger); b.disabled = !connected; });
+  $("#modeSub").textContent = !connected ? "" : !browserMode ? "The PC listens and speaks. Browsers only watch."
+    : "The PC is silent. One browser listens; browsers with their speaker on hear the answers.";
+  $("#wakeRow").hidden = !browserMode;
+  $("#wakeOn").checked = state.wake !== false;
+  $("#wakeOn").disabled = !connected;
+  $("#ptt").hidden = !browserMode;
+  $("#devCard").hidden = !browserMode;
   updatePttButton();
 
-  // devices
+  // browsers (Browser mode only)
   const clients = state.clients || {};
-  const ids = Object.keys(clients).sort((a, b) => (a === "pc" ? -1 : b === "pc" ? 1 : a.localeCompare(b, undefined, { numeric: true })));
-  $("#devices").innerHTML = ids.map(id => {
+  $("#devices").innerHTML = !browserMode ? "" : clientIds().map(id => {
     const c = clients[id], me = id === myId, holder = id === state.mic;
-    let sub = c.kind === "pc" ? "This server" : c.addr || "";
-    let cls = "";
-    if (holder) { const ms = c.mic_status || (c.kind === "pc" ? "ok" : "starting"); const [t, k] = MIC_MSG[ms] || [ms, ""]; sub = t; cls = k; }
-    return `<div class="dev ${holder ? "holder" : ""}" data-id="${esc(id)}">
-      <div class="dev-main"><div class="dev-name ${me ? "me" : ""}" ${me ? 'title="Click to rename"' : ""}>${esc(c.name)}${me ? '<span class="tag">you</span>' : ""}</div>
-        <div class="dev-sub ${cls}">${esc(sub)}</div></div>
-      <button class="icon ${holder ? "on" : ""}" data-act="mic" title="${holder ? "Has the microphone" : "Give the microphone to this device"}" ${holder ? "disabled" : ""}>${ICON.mic}</button>
-      <button class="icon ${c.muted ? "off" : "ok"}" data-act="mute" title="${c.muted ? "Speaker off, click to turn on" : "Speaker on, click to turn off"}">${c.muted ? ICON.spkOff : ICON.spk}</button>
+    let sub = c.addr || "", cls = "";
+    if (holder) { const [t, k] = MIC_MSG[c.mic_status || "starting"] || [c.mic_status, ""]; sub = t; cls = k; }
+    const ms = c.mic_status || "starting";
+    const dot = holder ? (ms === "ok" ? "s-live" : ms === "starting" || ms === "needs_tap" ? "s-wait" : "s-bad") : "s-idle";
+    const icon = /Android|iOS/.test(c.name || "") ? ICON.phone : ICON.monitor;
+    return `<div class="dev ${holder ? "holder" : ""}" data-id="${esc(id)}" data-kind="${me ? "me" : "other"}">
+      <div class="dev-main">
+        <span class="ico ${dot}">${icon}</span>
+        <div class="txt">
+          <div class="nm dev-name ${me ? "me" : ""}" ${me ? 'title="Click to rename"' : ""}><b>${esc(c.name)}</b>${me ? '<em class="badge tag">you</em>' : ""}</div>
+          <div class="st dev-sub ${cls}">${esc(sub)}</div>
+        </div>
+        <button class="tbtn ${holder ? "on" : "off"}" data-act="mic" title="${holder ? "Mic on, click to stop" : "Mic off, click to listen here"}" aria-label="Microphone">${holder ? ICON.mic : ICON.micOff}</button>
+        <button class="tbtn ${c.muted ? "off" : "on"}" data-act="mute" title="${c.muted ? "Speaker off, click to turn on" : "Speaker on, click to turn off"}" aria-label="Speaker">${c.muted ? ICON.spkOff : ICON.spk}</button>
+      </div>
     </div>`;
   }).join("");
 
-  // sliders (don't fight the user's finger)
+  // sliders (don't fight the user's finger); only the speech level of the mic in use
   const s = state.settings || {};
   setSlider("#wake", "#wakeOut", s.wake_thresh, v => Number(v).toFixed(2));
   setSlider("#thPc", "#thPcOut", s.thresh_pc, v => v);
   setSlider("#thBr", "#thBrOut", s.thresh_browser, v => v);
+  $("#fPc").hidden = browserMode;
+  $("#fBr").hidden = !browserMode;
   $("#micCard").hidden = !(connected && iHold);
-  $("#gate").value = gateThresh; $("#gateOut").textContent = gateThresh;
+  $("#gate").value = gateThresh; $("#gateOut").textContent = gateThresh; paintRange($("#gate"));
   updateBanner();
 }
+function paintRange(el) { el.style.setProperty("--p", ((el.value - el.min) / (el.max - el.min) * 100) + "%"); }
 function setSlider(sel, outSel, val, fmt) {
   const el = $(sel);
   if (val === undefined) return;
   if (document.activeElement !== el) el.value = val;
   $(outSel).textContent = fmt(el.value);
+  paintRange(el);
 }
 
 // --- controls -------------------------------------------------------------------------------------
 $("#modeSeg").onclick = e => {
   const b = e.target.closest("button"); if (!b || !myId) return;
   unlockAudio();
-  sendPatch({ mic: b.dataset.mode === "pc" ? "pc" : myId });
+  if (b.dataset.mode === "pc") sendPatch({ mode: "pc" });
+  else if (capState === "failed") { stopCapture(true); startCapture(); }       // retry a failed microphone
+  else sendPatch({ mode: "browser", mic: myId });                              // this browser listens
 };
-$("#trigSeg").onclick = e => { const b = e.target.closest("button"); if (b) sendPatch({ trigger: b.dataset.trig }); };
+$("#wakeOn").onchange = e => sendPatch({ wake: e.target.checked });
 $("#devices").onclick = e => {
   const name = e.target.closest(".dev-name.me");
   if (name) { const v = prompt("Name of this device", myName()); if (v && v.trim()) { store.set("name", v.trim()); sendPatch({ clients: { [myId]: { name: v.trim() } } }); } return; }
   const btn = e.target.closest("button[data-act]"); if (!btn) return;
   const id = btn.closest(".dev").dataset.id;
   unlockAudio();
-  if (btn.dataset.act === "mic") sendPatch({ mic: id });
+  if (btn.dataset.act === "mic") sendPatch({ mic: id === state.mic ? null : id });
   else sendPatch({ clients: { [id]: { muted: !state.clients[id].muted } } });
 };
 $("#stop").onclick = () => send({ t: "stop" });
@@ -465,6 +582,7 @@ $("#composer").onsubmit = e => {
 let sliderTimer;
 function sliderSend(sel, key) {
   $(sel).addEventListener("input", e => {
+    paintRange(e.target);
     const out = $(sel + "Out"); if (out) out.textContent = key === "wake_thresh" ? Number(e.target.value).toFixed(2) : e.target.value;
     clearTimeout(sliderTimer);
     sliderTimer = setTimeout(() => sendPatch({ settings: { [key]: Number(e.target.value) } }), 150);
@@ -473,23 +591,23 @@ function sliderSend(sel, key) {
 sliderSend("#wake", "wake_thresh"); sliderSend("#thPc", "thresh_pc"); sliderSend("#thBr", "thresh_browser");
 
 let gateThresh = Number(store.get("gate")) || 350;
-$("#gate").addEventListener("input", e => { gateThresh = Number(e.target.value); store.set("gate", gateThresh); $("#gateOut").textContent = gateThresh; drawMeter(); });
+$("#gate").addEventListener("input", e => { paintRange(e.target); gateThresh = Number(e.target.value); store.set("gate", gateThresh); $("#gateOut").textContent = gateThresh; drawMeter(); });
 
 // --- push to talk ---------------------------------------------------------------------------------
 let pttHeld = false, pttPressed = false, pttTimer = null;
 function canPtt() {
-  if (!myId || state.phase === "loading") return false;
-  if (state.mic === "pc") return true;
-  return state.mic === myId && capState === "on";
+  return !!myId && state.mode === "browser" && state.mic === myId && capState === "on" && state.phase !== "loading";
 }
 function updatePttButton() {
   const b = $("#ptt");
   const can = canPtt();
   b.disabled = !can && !pttPressed;
   b.classList.toggle("down", pttHeld);
-  b.textContent = pttHeld ? "Listening… release to send"
-    : !myId ? "Not connected" : state.mic !== "pc" && state.mic !== myId ? `Mic is on “${holderName()}”`
+  const tip = pttHeld ? "Listening… release to send"
+    : !myId ? "Not connected" : !state.mic ? "Nobody is listening: give the mic to a browser first"
+    : state.mic !== myId ? `The mic is on “${holderName()}”`
     : can ? "Hold to talk (or hold Space)" : "Microphone not ready";
+  b.title = tip; b.setAttribute("aria-label", tip);
 }
 function pttDown() {
   if (!canPtt()) return;
@@ -603,7 +721,7 @@ function onFrame(pcm) {
   if (loud) hang = HANGOVER_FRAMES; else if (hang > 0) hang--;
   // open while: push-to-talk is held, the server is recording a command, or there is (recent) sound
   const serverBusy = state.phase === "wake" || state.phase === "recording";
-  const want = pttHeld || serverBusy || (state.trigger === "wake" && (loud || hang > 0));
+  const want = pttHeld || serverBusy || (state.wake !== false && (loud || hang > 0));
   if (want) {
     if (!gateOpen) { for (const f of ring) sendFrame(f.c, f.d); ring = []; }
     sendFrame(counter, pcm);
@@ -676,7 +794,8 @@ function updateBanner() {
   const b = $("#banner");
   const me = state.clients?.[myId];
   let text = "";
-  if (me && micCtx && micCtx.state !== "running" && state.mic === myId) text = "Tap here to start the microphone";
+  if (state.mode !== "browser") text = "";
+  else if (me && micCtx && micCtx.state !== "running" && state.mic === myId) text = "Tap here to start the microphone";
   else if (me && !me.muted && (!pctx || pctx.state !== "running")) text = "Tap here to turn the sound on";
   b.textContent = text; b.classList.toggle("show", !!text);
 }
