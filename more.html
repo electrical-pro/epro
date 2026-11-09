@@ -552,6 +552,7 @@
   [data-ic="folder"]                                      { --ic: rgb(255, 200, 87); --ic-glow: rgba(255, 200, 87, .45); }
   [data-ic="gauge"]                                       { --ic: rgb(110, 231, 216); --ic-glow: rgba(110, 231, 216, .45); }
   [data-ic="gear"]                                        { --ic: #a9bcc7; --ic-glow: rgba(169, 188, 199, .35); }
+  [data-ic="grid"]                                        { --ic: #9aa8ff; --ic-glow: rgba(154, 168, 255, .45); }
   [data-ic="heart"]                                       { --ic: #ff6b81; --ic-glow: rgba(255, 107, 129, .45); }
   [data-ic="info"]                                        { --ic: rgb(92, 200, 255); --ic-glow: rgba(92, 200, 255, .45); }
   [data-ic="kitchen"]                                     { --ic: #ff9f5a; --ic-glow: rgba(255, 159, 90, .45); }
@@ -563,6 +564,7 @@
   [data-ic="restart"]                                     { --ic: rgb(255, 100, 100); --ic-glow: rgba(255, 100, 100, .45); }
   [data-ic="rgb"]                                         { --ic: #ffffff; --ic-glow: rgba(255, 255, 255, .25); }
   [data-ic="sat"]                                         { --ic: #5cc8ff; --ic-glow: rgba(92, 200, 255, .45); }
+  [data-ic="solar"]                                       { --ic: #ffc233; --ic-glow: rgba(255, 194, 51, .45); }
   [data-ic="speaker"]                                     { --ic: #ffb347; --ic-glow: rgba(255, 179, 71, .45); }
   [data-ic="thermo"]                                      { --ic: rgb(255, 122, 89); --ic-glow: rgba(255, 122, 89, .45); }
   [data-ic="toolbox"]                                     { --ic: #ff9f5a; --ic-glow: rgba(255, 159, 90, .45); }
@@ -860,7 +862,15 @@
     border-top: 1px solid var(--border);
     margin: 1px 0;
   }
-  .telemetry-new .line { padding: 5.5px 0; }
+  /* Wrapping fix: .telemetry-new has line-height 0, so a line that was too long
+     and wrapped had zero height per text row and the rows drew on top of each
+     other. Each .line now has a real line-height (16px) so wrapped text stays
+     readable, and the negative vertical margin (-2.5px) cancels the extra
+     height so a normal one-line row is exactly as tall and in the same place
+     as before (11px box, text centred 5.5px in). The first/last overrides below
+     do the same for the card's top and bottom edges. overflow-wrap lets a very
+     long unbroken word break instead of spilling out of the card. */
+  .telemetry-new .line { line-height: 16px; padding: 0; margin: -2.5px 0; overflow-wrap: anywhere; }
 
   /* Consistency fix: every card settles at the same 24px gap to its
      border (see --row-edge-pad in :root for the full explanation and
@@ -871,8 +881,8 @@
      first/last override brings just the two EDGES up to the standard
      gap. The 5.5px between lines in between is untouched, so telemetry
      stays as dense as it was. */
-  .telemetry-new .line:first-child { padding-top: var(--row-edge-pad); }
-  .telemetry-new .line:last-child { padding-bottom: 0; }
+  .telemetry-new .line:first-child { padding-top: calc(var(--row-edge-pad) - 5.5px); }
+  .telemetry-new .line:last-child { margin-bottom: -8px; }
 
   /* Small inline status tags within telemetry lines (see MyTelem.pl).
      Deliberately plain `inline` (a <span>'s default), NOT inline-block:
@@ -1325,17 +1335,19 @@ const MyTelem = {
     // detection (start: current > 32 A, stop: current < 22 A). Both are compared against
     // the ESP's own millis (ESP.Time.Mls), never the browser clock, so they stay in step.
     //  - start > stop  -> a charge is running: show how long it has been going.
-    //  - stop >= start -> charge ended: show how long it lasted, for 3 hours after it ended, with SOC at start -> stop.
+    //  - stop >= start -> charge ended: show how long it lasted, for 3 hours after it ended, with SOC at start -> stop. While running, the pill shows start SOC -> target SOC (ask_chrg_prc).
     const nowMs = s?.ESP?.Time?.Mls;
     const startMs = b.start?.ms || 0;
     const stopMs = b.stop?.ms || 0;
     const startSoc = Math.round(b.start?.soc || 0);
     const stopSoc = Math.round(b.stop?.soc || 0);
+    // ask_chrg_prc is a plain number (target SOC %), same as the slider and the CRG SUGGEST alert use it
+    const askSoc = Number.isFinite(b.ask_chrg_prc) ? Math.round(b.ask_chrg_prc) : null;
     if (nowMs !== undefined && startMs > 0) {
       if (startMs > stopMs) {
-        lines.push(`Charging for: ${this.formatDuration((nowMs - startMs) / 1000)} ` + this.pl('ONGOING', MyTelem.GREEN));
+        lines.push(`Charging for: ${this.formatDuration((nowMs - startMs) / 1000)} ` + this.pl(`ONGOING (${startSoc} -> ${askSoc ?? '?'})`, MyTelem.GREEN));
       } else if ((nowMs - stopMs) < 3 * 60 * 60 * 1000) {
-        lines.push(`Charge lasted: ${this.formatDuration((stopMs - startMs) / 1000)} ` + this.pl(`DONE · (${startSoc} -> ${stopSoc}) · ${this.formatDuration((nowMs - stopMs) / 1000)} ago`, MyTelem.BLUE));
+        lines.push(`Charged: ${this.formatDuration((stopMs - startMs) / 1000)} ` + this.pl(`DONE (${startSoc} -> ${stopSoc}) · ${this.formatDuration((nowMs - stopMs) / 1000)} ago`, MyTelem.BLUE));
       }
     }
 
@@ -1910,6 +1922,8 @@ const SVG_ICONS = {
   outside: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M20.5 13.8A8.5 8.5 0 1 1 10.2 3.5a6.8 6.8 0 0 0 10.3 10.3z"/><path class="ic-ray" d="M17 3v3.5M15.25 4.75h3.5"/></svg>',
   chicken: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" style="stroke:none" d="M15.8 4.9C14.9 7.4 13.4 9 11.6 9.2 9.8 9.4 8.6 8.9 7.9 8.7 6.7 8.3 6.2 6.9 5.2 6 4 5 2.6 5.5 2.3 7c-.3 1.4.3 2.3.6 2.7-.6.9-.4 1.6.7 2.1l2.2.6C6 14 6.8 15.6 8.2 16.8 9.8 18 12 18.2 14.2 18.1 17.3 17.9 19.7 16 20.1 11.8c.1-1.3-.5-2.1-.8-2.8-.1-.8.5-1.3.9-1.4L20.2 5.4L15.8 4.9z"/><path class="ic-fill" style="stroke:none" d="M15.8 4.9C15 4.2 15.1 3 16.2 2.6c.5-.2 1.1-.2 1.6 0 .5-.5 1.5-.5 1.9.2.9.1 1.5.9 1.1 1.8-.2.4-.5.6-.7.7z"/><path d="M15.8 4.9C15 4.2 15.1 3 16.2 2.6c.5-.2 1.1-.2 1.6 0 .5-.5 1.5-.5 1.9.2.9.1 1.5.9 1.1 1.8-.2.4-.5.6-.7.7"/><path d="M15.8 4.9C14.9 7.4 13.4 9 11.6 9.2 9.8 9.4 8.6 8.9 7.9 8.7 6.7 8.3 6.2 6.9 5.2 6 4 5 2.6 5.5 2.3 7c-.3 1.4.3 2.3.6 2.7-.6.9-.4 1.6.7 2.1l2.2.6C6 14 6.8 15.6 8.2 16.8 9.8 18 12 18.2 14.2 18.1 17.3 17.9 19.7 16 20.1 11.8c.1-1.3-.5-2.1-.8-2.8-.1-.8.5-1.3.9-1.4"/><path d="M20.3 5.2L20.4 5.9 21.9 7.1 20.2 7.7"/><path d="M3.1 9.5C4 10 5 10.4 5.8 10.7"/><path d="M15.7 11c.2 2-.7 3.8-2.3 4.500-1.300.6-2.800.5-3.8-.2"/><path d="M12 18.1V20.2M12 20.2L10.6 21.4M12 20.2L13.2 21.4M15.2 18V20.1M15.2 20.1L13.9 21.3M15.2 20.1L16.5 21.3"/><circle cx="18.4" cy="6.05" r=".65"/><circle class="ic-solid" cx="18.4" cy="6.05" r=".22"/></svg>',
   sat: '<svg viewBox="0 0 24 24" aria-hidden="true"><g transform="rotate(-45 12 12)"><rect x="2.5" y="10" width="5" height="4" rx=".6"/><rect class="ic-fill" x="9.5" y="8.5" width="5" height="7" rx="1.2"/><rect x="16.5" y="10" width="5" height="4" rx=".6"/><path d="M7.5 12h2M14.5 12h2"/></g><path class="ic-ray" d="M13 21a8 8 0 0 0 8-8M13 17.5a4.5 4.5 0 0 0 4.5-4.5"/></svg>',
+  solar: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle class="ic-fill" cx="12" cy="6" r="2.5"/><path class="ic-ray" d="M12 1.5v1M6.8 6h1M16.2 6h1M8.3 2.3l.7.7M15.7 2.3l-.7.7"/><path class="ic-fill" d="M5 20.5L7 12h10l2 8.5z"/><path d="M6 16.2h12M12 12v8.5"/></svg>',
+  grid: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" style="stroke:none" d="M12 3L7.6 21.5h8.8z"/><path d="M12 3L8 21.5M12 3l4 18.5"/><path d="M6 8h12M8.2 13.5h7.6"/><path d="M10.9 8l3.4 5.5M13.1 8L9.7 13.5"/><path class="ic-ray" d="M2 8h4M18 8h4"/></svg>',
   bolt: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M13.5 2.5L5 13.5h6.2l-.9 8L19 10.5h-6.2z"/></svg>',
   gear: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M9.81 4.93 L10.38 2.54 L13.62 2.54 L14.19 4.93 L15.45 5.45 L17.54 4.16 L19.84 6.46 L18.55 8.55 L19.07 9.81 L21.46 10.38 L21.46 13.62 L19.07 14.19 L18.55 15.45 L19.84 17.54 L17.54 19.84 L15.45 18.55 L14.19 19.07 L13.62 21.46 L10.38 21.46 L9.81 19.07 L8.55 18.55 L6.46 19.84 L4.16 17.54 L5.45 15.45 L4.93 14.19 L2.54 13.62 L2.54 10.38 L4.93 9.81 L5.45 8.55 L4.16 6.46 L6.46 4.16 L8.55 5.45z"/><circle cx="12" cy="12" r="3"/></svg>',
   toolbox: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M3.5 9.5h17v10a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5z"/><path d="M9 9.5V6.5A1.5 1.5 0 0 1 10.5 5h3A1.5 1.5 0 0 1 15 6.5v3"/><path d="M3.5 14.5h17"/><path d="M10.5 13v3h3v-3z"/></svg>',
@@ -2057,6 +2071,8 @@ const CONFIG = {
       items: [
         { type: 'toggle', endpoint: 'tvOn', stateKey: 'tvOn', icon: '📺', svg: 'tv', desc: 'LG TV', extraPosition: 'before',
           extra: [ { type: 'button', endpoint: 'IR?Blast=20DFA956', desc: 'LG TV Brightness', buttonText: 'Bright' } ] },
+        { type: 'toggle', endpoint: 'solDet', stateKey: 'BMS.solDet', icon: '☀️', svg: 'solar', desc: 'Solar notify'},
+        { type: 'toggle', endpoint: 'grdDet', stateKey: 'MainPower.grdDet', icon: '🗼', svg: 'grid', desc: 'Power grid notify'},
         { type: 'choice', endpoint: 'set_bat_mode', stateKey: 'BMS.batMode', icon: '🔌', svg: 'plug', desc: 'Charging mode', options: [{ v: 'auto_charging', l: 'Auto' }, { v: 'always_floating', l: 'Float' }] },
         { type: 'slider', endpoint: 'charge', stateKey: 'BMS.ask_chrg_prc', icon: '🔋', svg: 'battery', desc: 'Target charge', min: 0, max: 100, unit: '%' },
         { type: 'slider', endpoint: 'fan', stateKey: 'fanSpeed', icon: '🌀', svg: 'fan', desc: 'Fan speed', min: 0, max: 100, step: 10, unit: '%' },
