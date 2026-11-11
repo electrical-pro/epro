@@ -709,7 +709,24 @@
                 }
             }
 
-            return gaps;
+            return mergeConsecutiveBlackouts(gaps);
+        }
+
+        // A single isolated reading between two long gaps is not a "power" period
+        // (no power block is created for it), so it used to show up as two
+        // back-to-back blackouts. Merge adjacent blackouts into one.
+        function mergeConsecutiveBlackouts(gaps) {
+            const merged = [];
+            for (const gap of gaps) {
+                const prev = merged[merged.length - 1];
+                if (prev && !prev.hasPower && !gap.hasPower) {
+                    prev.end = gap.end;
+                    prev.duration += gap.duration;
+                } else {
+                    merged.push({ ...gap });
+                }
+            }
+            return merged;
         }
 
         function displayGaps(gaps, feeds) {
